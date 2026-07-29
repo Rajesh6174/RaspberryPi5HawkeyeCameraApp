@@ -50,9 +50,11 @@ CONTRAST_UI_MAX = 2.0
 SATURATION_UI_MAX = 2.0
 STALE_FRAME_SECONDS = 5.0
 
-REDACTED_LOCATION_COMMENT
-WEATHER_LAT = 0
-WEATHER_LON = 0
+# Set WEATHER_LAT / WEATHER_LON in ~/.config/camera-stream/location.env (see
+# config/location.env.example) - defaults below are intentionally generic so
+# this stays location-agnostic in source control.
+WEATHER_LAT = float(os.environ.get("WEATHER_LAT", "0"))
+WEATHER_LON = float(os.environ.get("WEATHER_LON", "0"))
 WEATHER_REFRESH_SECONDS = 15 * 60
 WEATHER_URL = (
     "https://api.open-meteo.com/v1/forecast"

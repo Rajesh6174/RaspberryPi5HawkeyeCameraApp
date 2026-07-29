@@ -1,0 +1,14 @@
+[Unit]
+Description=Garage door watcher -> Telegram alert (no Claude involved)
+After=camera-stream.service
+Requires=camera-stream.service
+
+[Service]
+EnvironmentFile=%h/.config/camera-stream/telegram.env
+ExecStart=/usr/bin/python3 %h/.local/share/camera-stream/garage_watch.py
+Restart=always
+RestartSec=5
+WorkingDirectory=%h/.local/share/camera-stream
+
+[Install]
+WantedBy=default.target
