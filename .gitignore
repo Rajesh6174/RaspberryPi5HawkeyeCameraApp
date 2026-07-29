@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+
+# Media captured by the camera - not source, not meant for the repo
+snapshots/
+recordings/
+continuous/
+
+# Local runtime state
+rotation_state.json
+
+# Secrets, in case any env file ever ends up in this directory
+*.env
+!*.env.example
