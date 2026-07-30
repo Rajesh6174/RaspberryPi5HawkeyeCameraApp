@@ -85,7 +85,7 @@ edit them directly, or see below for a faster recovery path.
 | File | Required? | What it's for |
 |---|---|---|
 | `gdrive.env` | Optional | Google Drive backup of snapshots/recordings/continuous buffer. Run `python3 setup_gdrive.py` once - it walks you through Google's device-authorization flow (a URL + code to approve on your phone) and writes `GDRIVE_REFRESH_TOKEN` automatically. Needs `GDRIVE_CLIENT_ID`/`GDRIVE_CLIENT_SECRET` from Google Cloud Console first (OAuth client type "TVs and Limited Input devices"). |
-| `location.env` | Optional | Lat/lon for the weather overlay drawn on the video feed. Without it, defaults to 0,0. |
+| `location.env` | Optional | Deploy-time default lat/lon for the weather overlay. Without it, defaults to 0,0. Can also be changed anytime from the web UI ("Set Weather Location") without touching this file or restarting - that live value is stored in `location_state.json` and takes precedence once set. |
 
 Restart the service after editing any of these:
 ```bash

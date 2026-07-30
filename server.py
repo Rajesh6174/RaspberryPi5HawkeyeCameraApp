@@ -32,6 +32,7 @@ os.makedirs(CONTINUOUS_DIR, exist_ok=True)
 THERMAL_ZONE_PATH = "/sys/class/thermal/thermal_zone0/temp"
 FAN_COOLING_DEVICE = "/sys/class/thermal/cooling_device0"
 ROTATION_STATE_FILE = os.path.join(BASE_DIR, "rotation_state.json")
+LOCATION_STATE_FILE = os.path.join(BASE_DIR, "location_state.json")
 
 SNAPSHOT_NAME_RE = re.compile(r"^snapshot_(full_)?\d{8}_\d{6}\.jpg$")
 RECORDING_NAME_RE = re.compile(r"^recording_\d{8}_\d{6}\.mp4$")
@@ -50,18 +51,22 @@ CONTRAST_UI_MAX = 2.0
 SATURATION_UI_MAX = 2.0
 STALE_FRAME_SECONDS = 5.0
 
-# Set WEATHER_LAT / WEATHER_LON in ~/.config/camera-stream/location.env (see
-# config/location.env.example) - defaults below are intentionally generic so
-# this stays location-agnostic in source control.
-WEATHER_LAT = float(os.environ.get("WEATHER_LAT", "0"))
-WEATHER_LON = float(os.environ.get("WEATHER_LON", "0"))
+# Deploy-time default location for the weather overlay, from
+# ~/.config/camera-stream/location.env (see config/location.env.example).
+# Overridden live from the web UI, which persists to LOCATION_STATE_FILE and
+# takes precedence once set - same relationship ROTATED has with rotate_state.
+WEATHER_LAT_DEFAULT = float(os.environ.get("WEATHER_LAT", "0"))
+WEATHER_LON_DEFAULT = float(os.environ.get("WEATHER_LON", "0"))
 WEATHER_REFRESH_SECONDS = 15 * 60
-WEATHER_URL = (
-    "https://api.open-meteo.com/v1/forecast"
-    f"?latitude={WEATHER_LAT}&longitude={WEATHER_LON}"
-    "&current=temperature_2m,weather_code"
-    "&temperature_unit=fahrenheit&timezone=auto"
-)
+
+
+def weather_url(lat, lon):
+    return (
+        "https://api.open-meteo.com/v1/forecast"
+        f"?latitude={lat}&longitude={lon}"
+        "&current=temperature_2m,weather_code"
+        "&temperature_unit=fahrenheit&timezone=auto"
+    )
 WEATHER_CODES = {
     0: "Clear", 1: "Mostly Clear", 2: "Partly Cloudy", 3: "Overcast",
     45: "Fog", 48: "Fog",
@@ -92,6 +97,7 @@ PAGE = """\
   .row { display:flex; align-items:center; gap:10px; margin:10px 0; }
   .row label { width:70px; flex-shrink:0; font-size:14px; }
   .row input[type=range] { flex:1; min-width:0; }
+  .row input[type=number] { flex:1; min-width:0; background:#2a2a2a; color:#eee; border:1px solid #444; border-radius:4px; padding:5px 8px; font-size:13px; }
   .val { width:52px; text-align:right; font-variant-numeric:tabular-nums; font-size:13px; color:#9cf; flex-shrink:0; }
   button { background:#2a6; color:#fff; border:none; padding:8px 14px; border-radius:5px; cursor:pointer; font-size:14px; }
   button:hover { background:#3b7; }
@@ -384,6 +390,16 @@ PAGE = """\
   <div class="btn-row">
     <button id="reset-image" class="secondary" style="width:100%;">Reset Image (Brightness/Contrast/Saturation)</button>
   </div>
+
+  <div class="row">
+    <label for="weather-lat">Lat</label>
+    <input type="number" id="weather-lat" step="0.0001" min="-90" max="90" value="0">
+    <label for="weather-lon" style="width:auto;margin-left:4px;">Lon</label>
+    <input type="number" id="weather-lon" step="0.0001" min="-180" max="180" value="0">
+  </div>
+  <div class="btn-row">
+    <button id="set-location-btn" class="secondary" style="width:100%;">Set Weather Location</button>
+  </div>
 </div>
 </div>
 
@@ -478,6 +494,9 @@ function applyState(s) {
   const saturation = document.getElementById('saturation');
   saturation.value = s.saturation;
   document.getElementById('saturation-val').textContent = s.saturation.toFixed(2);
+
+  if (document.activeElement.id !== 'weather-lat') document.getElementById('weather-lat').value = s.weather_lat;
+  if (document.activeElement.id !== 'weather-lon') document.getElementById('weather-lon').value = s.weather_lon;
 }
 
 document.getElementById('capture-btn').addEventListener('click', async () => {
@@ -569,6 +588,12 @@ function updateRecordingUI(rec) {
 
 document.getElementById('reset-image').addEventListener('click', () => {
   postAction('/api/reset-image').then(() => toast('Image settings reset')).catch(e => toast(e.message));
+});
+
+document.getElementById('set-location-btn').addEventListener('click', () => {
+  const lat = document.getElementById('weather-lat').value;
+  const lon = document.getElementById('weather-lon').value;
+  postAction(`/api/location?lat=${lat}&lon=${lon}`).then(() => toast('Weather location updated')).catch(e => toast(e.message));
 });
 
 document.getElementById('rotate-btn').addEventListener('click', async () => {
@@ -1145,11 +1170,12 @@ weather_state = {"text": None, "updated": None}
 
 
 def fetch_weather():
-    with urllib.request.urlopen(WEATHER_URL, timeout=10) as resp:
+    lat, lon = current["weather_lat"], current["weather_lon"]
+    with urllib.request.urlopen(weather_url(lat, lon), timeout=10) as resp:
         data = json.load(resp)
-    current = data["current"]
-    temp = round(current["temperature_2m"])
-    condition = WEATHER_CODES.get(current["weather_code"], "")
+    payload_current = data["current"]
+    temp = round(payload_current["temperature_2m"])
+    condition = WEATHER_CODES.get(payload_current["weather_code"], "")
     text = f"{temp}°F {condition}".strip()
     with weather_lock:
         weather_state["text"] = text
@@ -1265,6 +1291,20 @@ def save_rotated(rotated):
         json.dump({"rotated": rotated}, f)
 
 
+def load_location():
+    try:
+        with open(LOCATION_STATE_FILE) as f:
+            data = json.load(f)
+            return float(data["lat"]), float(data["lon"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def save_location(lat, lon):
+    with open(LOCATION_STATE_FILE, "w") as f:
+        json.dump({"lat": lat, "lon": lon}, f)
+
+
 def make_video_config(rotated):
     transform = Transform(hflip=1, vflip=1) if rotated else Transform()
     return picam2.create_video_configuration(
@@ -1312,6 +1352,8 @@ camera_worker = ThreadPoolExecutor(max_workers=1)
 
 AF_RANGES = {"normal": 0, "macro": 1, "full": 2}
 
+_saved_location = load_location()
+
 current = {
     "zoom": 1.0,
     "af_mode": "auto",
@@ -1322,6 +1364,8 @@ current = {
     "saturation": 1.0,
     "pan_x": 0.5,
     "pan_y": 0.5,
+    "weather_lat": _saved_location[0] if _saved_location else WEATHER_LAT_DEFAULT,
+    "weather_lon": _saved_location[1] if _saved_location else WEATHER_LON_DEFAULT,
 }
 
 PAN_STEP = 0.15
@@ -1351,6 +1395,8 @@ def get_state():
         "pan_x": current["pan_x"],
         "pan_y": current["pan_y"],
         "rotated": ROTATED,
+        "weather_lat": current["weather_lat"],
+        "weather_lon": current["weather_lon"],
     }
 
 
@@ -1452,6 +1498,18 @@ def reset_image_settings():
     set_brightness(0.0)
     set_contrast(1.0)
     set_saturation(1.0)
+
+
+def set_location(lat, lon):
+    lat = clamp(lat, -90.0, 90.0)
+    lon = clamp(lon, -180.0, 180.0)
+    current["weather_lat"] = lat
+    current["weather_lon"] = lon
+    save_location(lat, lon)
+    try:
+        fetch_weather()
+    except Exception:
+        logging.exception("weather fetch failed after location update")
 
 
 def read_cpu_temp():
@@ -2009,6 +2067,9 @@ class StreamingHandler(server.BaseHTTPRequestHandler):
                 self._send_json({"ok": True, **get_state()})
             elif path == "/api/reset-image":
                 reset_image_settings()
+                self._send_json({"ok": True, **get_state()})
+            elif path == "/api/location":
+                set_location(qf("lat", 0.0), qf("lon", 0.0))
                 self._send_json({"ok": True, **get_state()})
             elif path == "/api/rotate":
                 rotated = qs.get("value", ["0"])[0] == "1"
