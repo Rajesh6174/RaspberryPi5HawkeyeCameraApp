@@ -1,6 +1,6 @@
 # Hawkeye Camera
 
-<img src="./docs/images/banner.svg" />
+<img src="./docs/images/app_screenshot.png" alt="Hawkeye Camera web UI: live view, system stats, and controls (video pane shows a generic placeholder scene, not a real camera feed)" />
 
 ## About Hawkeye Camera
 
