@@ -79,13 +79,12 @@ You should see your camera model and its supported resolutions listed.
 
 None of these are in git, on purpose - they hold real credentials/secrets, and
 `.gitignore` excludes any `*.env` file except the `.example` templates. `install.sh`
-creates empty placeholders at `~/.config/camera-stream/{gdrive,telegram,location}.env` -
+creates empty placeholders at `~/.config/camera-stream/{gdrive,location}.env` -
 edit them directly, or see below for a faster recovery path.
 
 | File | Required? | What it's for |
 |---|---|---|
 | `gdrive.env` | Optional | Google Drive backup of snapshots/recordings/continuous buffer. Run `python3 setup_gdrive.py` once - it walks you through Google's device-authorization flow (a URL + code to approve on your phone) and writes `GDRIVE_REFRESH_TOKEN` automatically. Needs `GDRIVE_CLIENT_ID`/`GDRIVE_CLIENT_SECRET` from Google Cloud Console first (OAuth client type "TVs and Limited Input devices"). |
-| `telegram.env` | Optional | Needed only for `garage-watch.service` (Telegram alerts on door open/close). See `GARAGE_WATCHER.md` for the full bot setup + calibration steps. |
 | `location.env` | Optional | Lat/lon for the weather overlay drawn on the video feed. Without it, defaults to 0,0. |
 
 Restart the service after editing any of these:
@@ -134,13 +133,12 @@ chmod 600 ~/.config/camera-stream/*.env
 sudo reboot
 # 5. After reboot:
 systemctl --user restart camera-stream.service
-systemctl --user enable --now garage-watch.service   # only if you use it
 ```
 
 With the config backup in hand, steps 2-5 take a few minutes; the OS flash/first
 boot is the only inherently slow part. Without the config backup, the code and
 camera stream still come up fine from step 2 alone - you'd just need to redo the
-one-time Google Drive authorization and Telegram bot setup from scratch.
+one-time Google Drive authorization from scratch.
 
 **Fastest possible recovery**: keep a second SD card, run this whole guide on it
 once, then `sudo dd if=/dev/mmcblk0 of=pi-camera-backup.img bs=4M status=progress`

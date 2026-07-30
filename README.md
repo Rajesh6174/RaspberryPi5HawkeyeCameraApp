@@ -6,8 +6,7 @@
 
 Hawkeye Camera turns a Raspberry Pi 5 or 4 into a self-hosted camera system:
 a live MJPEG stream, on-demand snapshots and recordings, an always-on rolling
-video buffer, automatic Google Drive backup, and an optional garage-door
-open/closed watcher that alerts you over Telegram. Everything runs as a
+video buffer, and automatic Google Drive backup. Everything runs as a
 systemd user service - no cloud subscription, no third-party app required to
 view the feed.
 
@@ -16,13 +15,11 @@ view the feed.
 - Full-resolution stills on demand, independent of the live-view resolution
 - On-demand manual recordings (4K) alongside an always-on rolling buffer (720p) for after-the-fact review
 - Automatic background upload of snapshots/recordings/continuous footage to Google Drive
-- Garage door open/closed detection via pixel-diff against a reference image, with Telegram alerts - no LLM/API cost per check
 - Live weather overlay on the video feed
 - Runs unattended as a systemd user service with lingering enabled - survives reboot and logout with no login required
 
 **Optional integrations**:
 - Google Drive backup (OAuth device-flow authorization, resumable uploads)
-- Telegram bot alerts for the garage watcher
 - Weather overlay for your location
 
 See [SETUP.md](./SETUP.md) for full configuration details on each.
@@ -69,7 +66,7 @@ extra command to add its device-tree overlay - run it, then reboot. Once
 rebooted, the live stream is available at `http://<pi-ip>:8000/`.
 
 For the full walkthrough - including OS flashing, camera verification, and
-filling in optional secrets (Google Drive, Telegram) - see
+filling in optional secrets (Google Drive) - see
 [SETUP.md](./SETUP.md).
 
 ## Update
@@ -92,8 +89,8 @@ To update Hawkeye Camera with the latest code changes:
 ## Uninstall
 
 ```bash
-systemctl --user disable --now camera-stream.service garage-watch.service
-rm ~/.config/systemd/user/camera-stream.service ~/.config/systemd/user/garage-watch.service
+systemctl --user disable --now camera-stream.service
+rm ~/.config/systemd/user/camera-stream.service
 systemctl --user daemon-reload
 rm -rf ~/.local/share/camera-stream ~/.config/camera-stream
 ```

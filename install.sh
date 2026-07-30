@@ -41,7 +41,7 @@ mkdir -p "$REPO_DIR"/{snapshots,recordings,continuous}
 
 echo "==> Setting up config directory: $CONFIG_DIR"
 mkdir -p "$CONFIG_DIR"
-for name in gdrive telegram location; do
+for name in gdrive location; do
     example="$REPO_DIR/config/${name}.env.example"
     target="$CONFIG_DIR/${name}.env"
     if [ ! -f "$target" ]; then
@@ -56,7 +56,6 @@ done
 echo "==> Installing systemd user units"
 mkdir -p "$UNIT_DIR"
 cp "$REPO_DIR/systemd/camera-stream.service" "$UNIT_DIR/"
-cp "$REPO_DIR/systemd/garage-watch.service" "$UNIT_DIR/"
 
 echo "==> Enabling lingering (services survive logout/reboot without login)"
 sudo loginctl enable-linger "$USER"
@@ -74,13 +73,9 @@ echo "Next steps:"
 echo "  1. If you just edited $BOOT_CONFIG, reboot now: sudo reboot"
 echo "  2. Fill in real secrets in:"
 echo "       $CONFIG_DIR/gdrive.env     (optional - Google Drive backup)"
-echo "       $CONFIG_DIR/telegram.env   (optional - garage door alerts)"
 echo "       $CONFIG_DIR/location.env   (optional - weather overlay)"
 echo "     Then: systemctl --user restart camera-stream.service"
 echo "  3. To enable Google Drive backup, run once (interactive):"
 echo "       python3 $REPO_DIR/setup_gdrive.py"
-echo "  4. To enable the garage door watcher (needs telegram.env filled in"
-echo "     and a calibrated threshold - see GARAGE_WATCHER.md):"
-echo "       systemctl --user enable --now garage-watch.service"
-echo "  5. View the live stream at: http://<this-pi's-ip>:8000/"
+echo "  4. View the live stream at: http://<this-pi's-ip>:8000/"
 echo "============================================================"
