@@ -37,7 +37,7 @@ See [SETUP.md](./SETUP.md) for full configuration details on each, or
 - A CSI camera module
     - Built and tested against an **Arducam 64MP Hawkeye** (autofocus)
     - Should also work unmodified with the **Raspberry Pi Camera Module 3** (confirmed by code inspection, not yet on physical hardware) - the app reads resolution/AF range/crop limits from the sensor at runtime. See [Camera Compatibility](./SETUP.md#camera-compatibility-switching-away-from-the-arducam-64mp) in SETUP.md for the one required config change and what differs (autofocus support, max-zoom quality) across camera modules
-- CSI ribbon cable matching your Pi's connector (Pi 5's connector differs from Pi 4's)
+- CSI ribbon cable matching your Pi's connector (Pi 5's connector differs from Pi 4's) - see [Connecting the camera](./SETUP.md#connecting-the-camera-cable-and-orientation) in SETUP.md for exact cable types and a connection diagram
 - Active cooling (strongly recommended, especially on Pi 5 - expect 55-65°C+ under continuous recording load)
 - A case with an unobstructed camera mount
 

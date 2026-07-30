@@ -11,7 +11,7 @@ on either a Raspberry Pi 5 or Pi 4.
 | Official power supply | Pi 5: 27W USB-C PD (5V/5A). Pi 4: 5V/3A USB-C. Undersized supplies cause random reboots/throttling under load, especially while recording. |
 | microSD card, 32GB+ (A2/U3 rated) | Or boot from USB SSD/NVMe (Pi 5 supports PCIe natively) - recommended if you'll keep the continuous buffer's retention window long, since that's ~1GB/hour at the default bitrate. |
 | Camera module | This app was built against an **Arducam 64MP Hawkeye** (autofocus, CSI), but the code is sensor-agnostic - see [Camera Compatibility](#camera-compatibility-switching-away-from-the-arducam-64mp) below for what does and doesn't change if you use a different one. |
-| CSI ribbon cable | Comes with the camera module; make sure it matches your Pi's CSI connector (Pi 5's is a different connector pitch than Pi 4's - use the cable rated for your Pi model). |
+| CSI ribbon cable | Comes with the camera module; make sure it matches your Pi's CSI connector (Pi 5's is a different connector pitch than Pi 4's - use the cable rated for your Pi model). See [Connecting the camera](#connecting-the-camera-cable-and-orientation) below for exact cable types and a connection diagram. |
 | Cooling | Active cooling strongly recommended, especially Pi 5. CPU sits around 55-65°C under normal continuous-recording load in testing here; a passive heatsink alone will let it climb further and throttle. Official Active Cooler (Pi 5) or a case with a fan (Pi 4) is enough. |
 | Case with camera mount | Any case that exposes the CSI connector and gives the camera an unobstructed view of what you're monitoring. |
 | Network | Ethernet recommended for the live stream/uploads; Wi-Fi works fine too. |
@@ -59,6 +59,43 @@ these packages are installed via `apt`, not `pip`. Don't `pip install` them; the
 requirements.txt for this reason.
 
 ## 3. Enable the camera and reboot
+
+### Connecting the camera: cable and orientation
+
+Both the Arducam 64MP Hawkeye and the official Camera Module 3 use the same
+15-pin FPC connector on the camera board itself - the cable you need depends
+only on which Pi you're connecting to, not which camera you bought:
+
+```mermaid
+flowchart LR
+    CAM["Camera board\n(Arducam 64MP Hawkeye or\nCamera Module 3)\n15-pin FPC connector"]
+    P4["Raspberry Pi 4\nsingle CSI port\n15-pin, 1mm pitch"]
+    P5["Raspberry Pi 5\nCAM/DISP0 or CAM/DISP1\n22-pin, 0.5mm pitch"]
+
+    CAM -->|"15-pin to 15-pin cable"| P4
+    CAM -->|"15-pin to 22-pin adapter cable"| P5
+```
+
+- **Raspberry Pi 4** has one CSI camera port: 15-pin, 1mm pitch. Use the
+  standard 15-pin-to-15-pin ribbon cable - the one that ships in the box with
+  both the Arducam 64MP Hawkeye and Camera Module 3.
+- **Raspberry Pi 5** has two CSI/DISP ports (`CAM/DISP0` and `CAM/DISP1`, on
+  opposite sides of the board) - either works for a single camera. They're
+  22-pin, 0.5mm pitch - a physically different, smaller connector than Pi 4's,
+  running 4-lane MIPI CSI-2 instead of Pi 4's 2-lane. You need a
+  **15-pin-to-22-pin adapter cable**:
+    - The Arducam 64MP Hawkeye ships with this cable in the box alongside the
+      standard one - no separate purchase needed.
+    - Camera Module 3's standard (non-wide-angle) variant also now ships with
+      both cables. **The wide-angle variant does not** - if you bought that
+      one, you'll need a 15-pin-to-22-pin FPC camera cable separately (search
+      that exact term; widely stocked by Pi accessory retailers).
+
+**Orientation** (same principle on both boards): open the port's plastic
+locking tab by gently pulling it up, insert the cable with the metal contacts
+facing the **HDMI port side** of the board, then push the tab back down to
+lock it. If it's in backwards, the camera simply won't be detected - reversing
+an FPC cable doesn't damage anything.
 
 For the **Arducam 64MP** (this project's default):
 ```bash
