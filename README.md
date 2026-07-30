@@ -28,6 +28,7 @@ See [SETUP.md](./SETUP.md) for full configuration details on each.
 
 - Raspberry Pi 5 or 4 (Model B, 4GB+ RAM)
     - Pi 5 has no hardware H.264 encoder - 4K recording is software-encoded and CPU-heavier than Pi 4
+    - Also runs on a **Raspberry Pi Zero 2 W** (64-bit-capable, unlike the older non-"2" Zero/Zero W) with a reduced-resolution config - see [Low-Power Boards](./SETUP.md#low-power-boards-raspberry-pi-zero-2-w) in SETUP.md
 - Official power supply (Pi 5: 27W USB-C PD; Pi 4: 5V/3A USB-C)
 - MicroSD card, 32GB+ (A2/U3 rated), or a USB SSD/NVMe boot drive
 - A CSI camera module

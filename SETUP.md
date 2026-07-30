@@ -144,6 +144,83 @@ curl -s http://127.0.0.1:8000/api/sysinfo | python3 -m json.tool
 
 Then open `http://<pi-ip>:8000/` in a browser for the live view.
 
+## Low-Power Boards (Raspberry Pi Zero 2 W)
+
+The Zero 2 W is a much weaker board than the Pi 4/5 this app was tuned for: a
+quad-core Cortex-A53 at 1GHz (vs. Pi 5's quad-core Cortex-A76 at 2.4GHz) and only
+**512MB RAM** total. The default configuration - a 4K main stream kept running at
+all times, 20Mbps software H.264 encoding - was never going to fit that. Everything
+below exists to work around that, not to add features.
+
+**Good news first: this is important because Zero 2 W is 64-bit-capable.** Its
+Cortex-A53 cores support `aarch64`, so it runs the same 64-bit Raspberry Pi OS and
+the same `python3-picamera2`/`libcamera` stack as the Pi 4/5 - no different install
+path. This is *not* true of the older, non-"2" **Pi Zero / Zero W** (single-core
+ARM11, 32-bit only) - those cannot run `picamera2` at all and are not supported by
+this app, full stop. Double-check which board you have before following this
+section.
+
+### Hardware differences from the Pi 4/5 guide above
+
+| Item | Zero 2 W difference |
+|---|---|
+| CSI cable | The Zero 2 W's camera connector is physically smaller/narrower than the Pi 4's or 5's. You need a **"Camera Cable for Raspberry Pi Zero"** (narrow end to the Zero, standard width to the camera module) - the Pi 4/5 cables in the hardware table above will not fit. |
+| Power | Micro-USB, not USB-C. Use the port labeled **PWR IN** specifically (the other micro-USB port is data/OTG only) with a good quality 5V/2A+ supply. |
+| Networking | **Wi-Fi only (2.4GHz b/g/n) - no Ethernet port.** The live stream, Drive uploads, and weather overlay all depend on this one, slower, less reliable link. Expect more dropped-frame/reconnect behavior than on a wired Pi 4/5. |
+| Storage | No PCIe, so no NVMe/SSD boot option - microSD only (or USB via the single OTG port, which also has to share bandwidth with anything else on it). |
+| Cooling | No official "Active Cooler" product for this form factor. A case with a small heatsink is worth it if you enable continuous recording - even the reduced-load profile below runs the CPU for hours at a stretch. |
+
+### Required software change: use the low-power performance profile
+
+Without this, expect out-of-memory kills or a live view that can't keep up. Copy the
+template and uncomment the low-power block:
+```bash
+cp ~/.local/share/camera-stream/config/performance.env.example ~/.config/camera-stream/performance.env
+```
+Edit it to uncomment the **"Low-power board"** section (leave the "Defaults" section
+commented out):
+```
+CAMERA_MAIN_WIDTH=1280
+CAMERA_MAIN_HEIGHT=720
+CAMERA_LORES_WIDTH=640
+CAMERA_LORES_HEIGHT=360
+CAMERA_BUFFER_COUNT=3
+RECORDING_BITRATE=4000000
+CONTINUOUS_BITRATE=800000
+CONTINUOUS_DEFAULT_ENABLED=0
+```
+```bash
+chmod 600 ~/.config/camera-stream/performance.env
+systemctl --user restart camera-stream.service
+```
+
+What each setting is doing, and why:
+- **`CAMERA_MAIN_WIDTH`/`HEIGHT` (1280x720, down from 3840x2160)** - this is the
+  single biggest lever. The "main" stream stays configured at this size *at all
+  times* (not just while recording), so it's a permanent memory/CPU cost, not a
+  one-time one. It's also now your recording resolution - on this profile,
+  recordings save at 720p, not 4K. That's the trade-off, not a bug.
+- **`CAMERA_BUFFER_COUNT=3` (down from 6)** - fewer in-flight frame buffers, directly
+  trading a bit of pipeline smoothness for RAM headroom on a 512MB board.
+- **`RECORDING_BITRATE`/`CONTINUOUS_BITRATE`** (4Mbps/0.8Mbps, down from 20Mbps/2Mbps)
+  - lower encode target = less CPU spent per frame, which matters more on a 1GHz
+  quad-core with no hardware encoder than it does on Pi 5.
+- **`CONTINUOUS_DEFAULT_ENABLED=0`** - the always-on rolling buffer is disabled by
+  default here, since it's continuous CPU/disk load on top of everything else. Turn
+  it on manually from the web UI ("Start Continuous Recording") once you've confirmed
+  the reduced live-view load is stable, and watch CPU/RAM (`/api/sysinfo`) after.
+
+These starting values are derived from the platform's known constraints (CPU/RAM
+specs), not from testing against physical Zero 2 W hardware - if you hit OOM kills or
+dropped frames even at this profile, lower `CAMERA_MAIN_WIDTH`/`HEIGHT` further (e.g.
+640x480) and/or `CAMERA_BUFFER_COUNT` to 2, and open an issue with what worked.
+
+Everything else - installing packages, enabling the camera overlay, filling in
+`gdrive.env`/`location.env`, the systemd units - is identical to the Pi 4/5
+instructions above. `install.sh` seeds `performance.env` from the template
+automatically (commented out, same as the other config files) - you still have to
+edit it in and uncomment the block yourself.
+
 ## Disaster recovery: SD card corrupts, get back up fast
 
 The repo holds all the code and unit files, but **three things live outside git on

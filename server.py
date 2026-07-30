@@ -34,17 +34,37 @@ FAN_COOLING_DEVICE = "/sys/class/thermal/cooling_device0"
 ROTATION_STATE_FILE = os.path.join(BASE_DIR, "rotation_state.json")
 LOCATION_STATE_FILE = os.path.join(BASE_DIR, "location_state.json")
 
+# Performance/resolution knobs, all overridable from
+# ~/.config/camera-stream/performance.env (see config/performance.env.example).
+# Defaults below match the original fixed values this app shipped with (tuned for
+# Pi 4/5); a Raspberry Pi Zero 2 W or other low-RAM/low-CPU board needs a much
+# smaller profile - see the "Low-Power Boards" section in SETUP.md.
+def _env_int(name, default):
+    return int(os.environ.get(name, default))
+
+
+def _env_bool(name, default):
+    val = os.environ.get(name)
+    return default if val is None else val not in ("0", "false", "False", "")
+
+
 SNAPSHOT_NAME_RE = re.compile(r"^snapshot_(full_)?\d{8}_\d{6}\.jpg$")
 RECORDING_NAME_RE = re.compile(r"^recording_\d{8}_\d{6}\.mp4$")
-RECORDING_BITRATE = 20_000_000  # 4K H.264, software-encoded on Pi 5 (no hw encoder)
+RECORDING_BITRATE = _env_int("RECORDING_BITRATE", 20_000_000)  # 4K H.264, software-encoded on Pi 5 (no hw encoder)
 
 CONTINUOUS_NAME_RE = re.compile(r"^continuous_\d{8}_\d{6}\.mp4$")
-CONTINUOUS_BITRATE = 2_000_000  # 720p H.264, low CPU/storage cost for an always-on buffer
-CONTINUOUS_SEGMENT_SECONDS = 10 * 60
-CONTINUOUS_RETENTION_SECONDS = 3 * 60 * 60
+CONTINUOUS_BITRATE = _env_int("CONTINUOUS_BITRATE", 2_000_000)  # 720p H.264, low CPU/storage cost for an always-on buffer
+CONTINUOUS_SEGMENT_SECONDS = _env_int("CONTINUOUS_SEGMENT_SECONDS", 10 * 60)
+CONTINUOUS_RETENTION_SECONDS = _env_int("CONTINUOUS_RETENTION_SECONDS", 3 * 60 * 60)
+CONTINUOUS_DEFAULT_ENABLED = _env_bool("CONTINUOUS_DEFAULT_ENABLED", True)
 
-LIVE_MAIN_SIZE = (3840, 2160)  # recording resolution - always ready, no mode switch needed
-LIVE_LORES_SIZE = (1280, 720)  # live view / MJPEG preview resolution
+# Recording resolution - the "main" stream stays configured at this size at all times
+# so 4K recording (or whatever size is set here) can start instantly with no mode
+# switch. On low-RAM boards, shrinking this is the single biggest lever - it's an
+# always-on buffer cost, not just a during-recording one.
+LIVE_MAIN_SIZE = (_env_int("CAMERA_MAIN_WIDTH", 3840), _env_int("CAMERA_MAIN_HEIGHT", 2160))
+LIVE_LORES_SIZE = (_env_int("CAMERA_LORES_WIDTH", 1280), _env_int("CAMERA_LORES_HEIGHT", 720))  # live view / MJPEG preview resolution
+CAMERA_BUFFER_COUNT = _env_int("CAMERA_BUFFER_COUNT", 6)
 
 ZOOM_MAX = 8.0
 CONTRAST_UI_MAX = 2.0
@@ -1404,7 +1424,7 @@ def make_video_config(rotated):
         main={"size": LIVE_MAIN_SIZE, "format": "YUV420"},
         lores={"size": LIVE_LORES_SIZE, "format": "YUV420"},
         encode="lores",
-        buffer_count=6,
+        buffer_count=CAMERA_BUFFER_COUNT,
         transform=transform,
     )
 
@@ -1435,7 +1455,7 @@ lores_encoder = None
 continuous_encoder = None
 continuous_file = None
 continuous_segment_start_time = None
-continuous_enabled = True  # always starts on boot; can be paused/resumed at runtime
+continuous_enabled = CONTINUOUS_DEFAULT_ENABLED  # state on boot; can be paused/resumed at runtime
 
 # FfmpegOutput spawns ffmpeg with PR_SET_PDEATHSIG tied to the calling thread (not the
 # process), so it must be started from a thread that outlives the request - not from a
