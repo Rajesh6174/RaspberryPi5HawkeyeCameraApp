@@ -66,28 +66,49 @@ Both the Arducam 64MP Hawkeye and the official Camera Module 3 use the same
 15-pin FPC connector on the camera board itself - the cable you need depends
 only on which Pi you're connecting to, not which camera you bought:
 
-<img src="./docs/images/camera_cable_diagram.svg" alt="Camera cable connection diagram: Raspberry Pi 4 uses a 15-pin to 15-pin ribbon cable into its single CSI port; Raspberry Pi 5 uses a 15-pin to 22-pin adapter cable into either CAM/DISP port. Both diagrams show the cable's contacts must face toward the HDMI side of the board - inserting it reversed just means the camera won't be detected, it won't cause damage." />
+<img src="./docs/images/camera_cable_diagram.svg" alt="Camera cable connection diagram: Raspberry Pi 4 uses a 15-pin to 15-pin ribbon cable into its single CSI port with contacts facing toward HDMI; Raspberry Pi 5 uses a 15-pin to 22-pin adapter cable into either CAM/DISP port with contacts facing toward USB/Ethernet instead - the opposite of Pi 4. Inserting a cable reversed just means the camera won't be detected, it won't cause damage." />
 
-- **Raspberry Pi 4** has one CSI camera port: 15-pin, 1mm pitch. Use the
-  standard 15-pin-to-15-pin ribbon cable - the one that ships in the box with
-  both the Arducam 64MP Hawkeye and Camera Module 3.
+- **Raspberry Pi 4** has one CSI camera port: 15-pin, 1mm pitch, 2-lane MIPI
+  CSI-2. Use the standard 15-pin-to-15-pin ribbon cable - the one that ships
+  in the box with both the Arducam 64MP Hawkeye and Camera Module 3.
 - **Raspberry Pi 5** has two CSI/DISP ports (`CAM/DISP0` and `CAM/DISP1`, on
-  opposite sides of the board) - either works for a single camera. They're
-  22-pin, 0.5mm pitch - a physically different, smaller connector than Pi 4's,
-  running 4-lane MIPI CSI-2 instead of Pi 4's 2-lane. You need a
-  **15-pin-to-22-pin adapter cable**:
+  opposite sides of the board, natively 4-lane) - either works for a single
+  camera, and it defaults to `CAM/DISP1` if you don't specify one (see the
+  troubleshooting note below to force `CAM/DISP0` instead). They're 22-pin,
+  0.5mm pitch - a physically different, smaller connector than Pi 4's. You
+  need a **15-pin-to-22-pin adapter cable**:
     - The Arducam 64MP Hawkeye ships with this cable in the box alongside the
       standard one - no separate purchase needed.
     - Camera Module 3's standard (non-wide-angle) variant also now ships with
       both cables. **The wide-angle variant does not** - if you bought that
       one, you'll need a 15-pin-to-22-pin FPC camera cable separately (search
       that exact term; widely stocked by Pi accessory retailers).
+    - Since the camera itself only has a 15-pin (2-lane) connector, this
+      adapter runs at 2 lanes even on Pi 5's 4-lane-capable port - a non-issue
+      for this app's resolutions, just don't expect the adapter to unlock
+      extra bandwidth the camera doesn't have.
 
-**Orientation** (same principle on both boards): open the port's plastic
-locking tab by gently pulling it up, insert the cable with the metal contacts
-facing the **HDMI port side** of the board, then push the tab back down to
-lock it. If it's in backwards, the camera simply won't be detected - reversing
-an FPC cable doesn't damage anything.
+**Orientation - the official, always-correct way to think about it**: open
+the port's plastic locking flap by gently pulling it up, insert the cable
+with the metallic contacts facing *away from the flap*, then push the flap
+back down until it clicks. That instruction is identical on every Raspberry
+Pi board (this is the Raspberry Pi Foundation's own phrasing), so it's the
+one to trust if the board-relative description below ever feels ambiguous.
+
+As a visual double-check once the cable's in: on **Pi 4**, contacts end up
+facing the **HDMI side**; on **Pi 5**, they end up facing the **USB/Ethernet
+side instead - the mirror image of Pi 4**, not the same direction. It's an
+easy assumption to carry over by habit if you've set up a Pi 4 before, so
+worth confirming explicitly on a Pi 5 build. Either way, if it's in backwards
+the camera simply won't be detected - reversing an FPC cable doesn't damage
+anything, so there's no risk in checking by trial.
+
+**Troubleshooting: camera not detected on Pi 5.** If nothing shows up in
+`rpicam-hello --list-cameras`, double check you plugged into the port your
+overlay expects - Pi 5 defaults to `CAM/DISP1` when the dtoverlay doesn't
+specify otherwise. To force the other port, append `,cam0` to the overlay
+line, e.g. `dtoverlay=arducam-64mp,cam0` in `/boot/firmware/config.txt`, then
+reboot.
 
 For the **Arducam 64MP** (this project's default):
 ```bash
@@ -225,7 +246,7 @@ section.
 
 | Item | Zero 2 W difference |
 |---|---|
-| CSI cable | The Zero 2 W's camera connector is physically smaller/narrower than the Pi 4's or 5's. You need a **"Camera Cable for Raspberry Pi Zero"** (narrow end to the Zero, standard width to the camera module) - the Pi 4/5 cables in the hardware table above will not fit. |
+| CSI cable | The Zero 2 W's camera connector is physically smaller/narrower than the Pi 4's or 5's. You need a **"Camera Cable for Raspberry Pi Zero"** (narrow end to the Zero, standard width to the camera module) - the Pi 4/5 cables in the hardware table above will not fit. Same orientation rule as [above](#connecting-the-camera-cable-and-orientation): contacts face away from the connector's locking flap. Cable orientation on the Zero's socket is a commonly-reported cause of "camera not detected" - if `rpicam-hello --list-cameras` comes up empty and everything else checks out, try reseating the cable flipped before assuming a hardware fault. |
 | Power | Micro-USB, not USB-C. Use the port labeled **PWR IN** specifically (the other micro-USB port is data/OTG only) with a good quality 5V/2A+ supply. |
 | Networking | **Wi-Fi only (2.4GHz b/g/n) - no Ethernet port.** The live stream, Drive uploads, and weather overlay all depend on this one, slower, less reliable link. Expect more dropped-frame/reconnect behavior than on a wired Pi 4/5. |
 | Storage | No PCIe, so no NVMe/SSD boot option - microSD only (or USB via the single OTG port, which also has to share bandwidth with anything else on it). |
