@@ -1,3 +1,5 @@
+import base64
+import hmac
 import io
 import json
 import logging
@@ -65,6 +67,14 @@ CONTINUOUS_DEFAULT_ENABLED = _env_bool("CONTINUOUS_DEFAULT_ENABLED", True)
 LIVE_MAIN_SIZE = (_env_int("CAMERA_MAIN_WIDTH", 3840), _env_int("CAMERA_MAIN_HEIGHT", 2160))
 LIVE_LORES_SIZE = (_env_int("CAMERA_LORES_WIDTH", 1280), _env_int("CAMERA_LORES_HEIGHT", 720))  # live view / MJPEG preview resolution
 CAMERA_BUFFER_COUNT = _env_int("CAMERA_BUFFER_COUNT", 6)
+
+# HTTP Basic Auth, from ~/.config/camera-stream/auth.env (see config/auth.env.example).
+# Optional, same pattern as Drive/location/performance config - unset means the
+# server is open on the LAN with no login, matching this app's original behavior.
+AUTH_USER = os.environ.get("CAMERA_USER")
+AUTH_PASS = os.environ.get("CAMERA_PASS")
+AUTH_ENABLED = bool(AUTH_USER and AUTH_PASS)
+AUTH_REALM = "Hawkeye Camera"
 
 ZOOM_MAX = 8.0
 CONTRAST_UI_MAX = 2.0
@@ -2011,6 +2021,31 @@ class StreamingHandler(server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _check_auth(self):
+        """Returns True if the request may proceed. Otherwise sends a 401 and
+        returns False - callers must return immediately without further writes."""
+        if not AUTH_ENABLED:
+            return True
+        header = self.headers.get("Authorization", "")
+        ok = False
+        if header.startswith("Basic "):
+            try:
+                decoded = base64.b64decode(header[len("Basic "):]).decode("utf-8")
+                user, _, pw = decoded.partition(":")
+            except (ValueError, UnicodeDecodeError):
+                user, pw = "", ""
+            ok = hmac.compare_digest(user, AUTH_USER) and hmac.compare_digest(pw, AUTH_PASS)
+        if ok:
+            return True
+        body = b"Authentication required"
+        self.send_response(401)
+        self.send_header("WWW-Authenticate", f'Basic realm="{AUTH_REALM}"')
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+        return False
+
     def _send_video_file(self, fpath):
         file_size = os.path.getsize(fpath)
         range_header = self.headers.get("Range")
@@ -2045,6 +2080,8 @@ class StreamingHandler(server.BaseHTTPRequestHandler):
                 shutil.copyfileobj(f, self.wfile)
 
     def do_GET(self):
+        if not self._check_auth():
+            return
         path = urllib.parse.urlparse(self.path).path
 
         if path == "/favicon.ico":
@@ -2145,6 +2182,8 @@ class StreamingHandler(server.BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_POST(self):
+        if not self._check_auth():
+            return
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
         qs = urllib.parse.parse_qs(parsed.query)

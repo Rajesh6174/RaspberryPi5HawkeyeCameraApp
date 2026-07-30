@@ -17,10 +17,12 @@ view the feed.
 - Automatic background upload of snapshots/recordings/continuous footage to Google Drive - fully optional, pausable/resumable from the UI, with backed-up files browsable and deletable from the app
 - Live weather overlay on the video feed
 - Runs unattended as a systemd user service with lingering enabled - survives reboot and logout with no login required
+- Optional HTTP Basic Auth on the stream and web UI - open on your LAN by default, lockable with a username/password
 
 **Optional integrations**:
 - Google Drive backup (OAuth device-flow authorization, resumable uploads)
 - Weather overlay for your location
+- HTTP Basic Auth login (see [Authentication](./SETUP.md#authentication-optional) in SETUP.md)
 
 See [SETUP.md](./SETUP.md) for full configuration details on each.
 

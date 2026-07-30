@@ -122,13 +122,15 @@ it's a resolution trade-off, not a bug.
 
 None of these are in git, on purpose - they hold real credentials/secrets, and
 `.gitignore` excludes any `*.env` file except the `.example` templates. `install.sh`
-creates empty placeholders at `~/.config/camera-stream/{gdrive,location}.env` -
+creates empty placeholders at `~/.config/camera-stream/{gdrive,location,performance,auth}.env` -
 edit them directly, or see below for a faster recovery path.
 
 | File | Required? | What it's for |
 |---|---|---|
 | `gdrive.env` | Optional | Google Drive backup of snapshots/recordings/continuous buffer. Run `python3 setup_gdrive.py` once - it walks you through Google's device-authorization flow (a URL + code to approve on your phone) and writes `GDRIVE_REFRESH_TOKEN` automatically. Needs `GDRIVE_CLIENT_ID`/`GDRIVE_CLIENT_SECRET` from Google Cloud Console first (OAuth client type "TVs and Limited Input devices"). Entirely optional - without this file the app runs identically, it just skips backup. Once configured, uploading can be paused/resumed anytime from the web UI ("Pause/Resume Google Drive Uploads"), and backed-up files can be browsed and deleted straight from Drive via the "Drive Backups" tab in the gallery - no need to open Drive separately. |
 | `location.env` | Optional | Deploy-time default lat/lon for the weather overlay. Without it, defaults to 0,0. Can also be changed anytime from the web UI ("Set Weather Location") without touching this file or restarting - that live value is stored in `location_state.json` and takes precedence once set. |
+| `performance.env` | Optional | Resolution/bitrate/buffer overrides. Without it, the original fixed Pi 4/5-tuned values apply. Needed on low-RAM boards - see [Low-Power Boards](#low-power-boards-raspberry-pi-zero-2-w). |
+| `auth.env` | Optional | `CAMERA_USER`/`CAMERA_PASS` for HTTP Basic Auth on the stream and web UI. Without it (or with either value empty), the server stays open on your LAN with no login - this app's original behavior. See [Authentication](#authentication-optional) below. |
 
 Restart the service after editing any of these:
 ```bash
@@ -143,6 +145,35 @@ curl -s http://127.0.0.1:8000/api/sysinfo | python3 -m json.tool
 ```
 
 Then open `http://<pi-ip>:8000/` in a browser for the live view.
+
+## Authentication (optional)
+
+By default, the stream and web UI are wide open to anyone on your LAN - no login.
+To require one:
+```bash
+cp ~/.local/share/camera-stream/config/auth.env.example ~/.config/camera-stream/auth.env
+nano ~/.config/camera-stream/auth.env   # set CAMERA_USER / CAMERA_PASS
+chmod 600 ~/.config/camera-stream/auth.env
+systemctl --user restart camera-stream.service
+```
+Every route is protected (the web UI, the `/api/*` endpoints, and `/stream.mjpg`) via
+HTTP Basic Auth - your browser will prompt for the username/password once, then
+cache and resend them automatically for the rest of the page's requests.
+
+**In VLC**, embed the credentials directly in the URL instead of relying on a prompt:
+```
+Media -> Open Network Stream -> http://username:password@<pi-ip>:8000/stream.mjpg
+```
+
+Leave the file absent, or either value empty, to keep the server open with no login -
+same as before this feature existed.
+
+**Security scope, so expectations are accurate**: this is Basic Auth over plain
+HTTP (there's no TLS anywhere in this app). It's enough to keep casual users on
+your LAN out, but credentials travel base64-encoded, not encrypted, so don't reuse
+a sensitive password here. This absolutely does not make it safe to port-forward
+port 8000 to the public internet - for that, put a reverse proxy with real HTTPS in
+front of it instead.
 
 ## Low-Power Boards (Raspberry Pi Zero 2 W)
 
@@ -268,9 +299,11 @@ you'd like."
 
 ## Known limitations worth knowing about
 
-- The MJPEG stream on port 8000 has **no authentication** - anyone on your network
-  (or beyond, if you port-forward it) can view it. Don't expose port 8000 to the
-  public internet without putting a reverse proxy with auth in front of it.
+- The MJPEG stream on port 8000 has **no authentication by default** - anyone on
+  your network can view it unless you set up `auth.env` (see
+  [Authentication](#authentication-optional) above). Even with it enabled, that's
+  Basic Auth over plain HTTP, not real security - don't expose port 8000 to the
+  public internet without a reverse proxy providing actual HTTPS in front of it.
 - Pi 5 has no hardware H.264 encoder, so 4K recording (`recording_bitrate`) is
   CPU-bound - expect higher temps and lower headroom for other work while a
   manual recording is active, compared to Pi 4 (which does have hardware encode).

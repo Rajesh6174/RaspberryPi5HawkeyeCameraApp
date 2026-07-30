@@ -41,7 +41,7 @@ mkdir -p "$REPO_DIR"/{snapshots,recordings,continuous}
 
 echo "==> Setting up config directory: $CONFIG_DIR"
 mkdir -p "$CONFIG_DIR"
-for name in gdrive location performance; do
+for name in gdrive location performance auth; do
     example="$REPO_DIR/config/${name}.env.example"
     target="$CONFIG_DIR/${name}.env"
     if [ ! -f "$target" ]; then
@@ -76,6 +76,8 @@ echo "       $CONFIG_DIR/gdrive.env      (optional - Google Drive backup)"
 echo "       $CONFIG_DIR/location.env    (optional - weather overlay)"
 echo "       $CONFIG_DIR/performance.env (optional - resolution/bitrate; needed on"
 echo "                                    low-RAM boards like a Pi Zero 2 W - see SETUP.md)"
+echo "       $CONFIG_DIR/auth.env        (optional - HTTP Basic Auth login for the"
+echo "                                    stream/UI; open on your LAN with no login if absent)"
 echo "     Then: systemctl --user restart camera-stream.service"
 echo "  3. To enable Google Drive backup, run once (interactive):"
 echo "       python3 $REPO_DIR/setup_gdrive.py"
