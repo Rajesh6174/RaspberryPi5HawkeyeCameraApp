@@ -16,6 +16,12 @@ on either a Raspberry Pi 5 or Pi 4.
 | Case with camera mount | Any case that exposes the CSI connector and gives the camera an unobstructed view of what you're monitoring. |
 | Network | Ethernet recommended for the live stream/uploads; Wi-Fi works fine too. |
 
+For a broader reference beyond this app's specific supported hardware - other
+official/Arducam camera models, Touch Displays, PCIe/NVMe, full port specs -
+see [docs/hardware-reference.md](./docs/hardware-reference.md). Everything on
+*this* page stays scoped to exactly what the app supports and has been
+verified against running hardware.
+
 ## 1. Flash the OS
 
 1. Download [Raspberry Pi Imager](https://www.raspberrypi.com/software/).

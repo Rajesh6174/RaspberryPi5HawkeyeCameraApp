@@ -41,7 +41,9 @@ See [SETUP.md](./SETUP.md) for full configuration details on each, or
 - Active cooling (strongly recommended, especially on Pi 5 - expect 55-65°C+ under continuous recording load)
 - A case with an unobstructed camera mount
 
-See [SETUP.md](./SETUP.md) for the full hardware rationale and a step-by-step build guide.
+See [SETUP.md](./SETUP.md) for the full hardware rationale and a step-by-step build guide,
+or [docs/hardware-reference.md](./docs/hardware-reference.md) for a broader Raspberry Pi
+port/cable/camera reference beyond just this app's specific supported hardware.
 
 ## Installation
 
