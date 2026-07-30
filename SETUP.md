@@ -122,7 +122,8 @@ it's a resolution trade-off, not a bug.
 
 None of these are in git, on purpose - they hold real credentials/secrets, and
 `.gitignore` excludes any `*.env` file except the `.example` templates. `install.sh`
-creates empty placeholders at `~/.config/camera-stream/{gdrive,location,performance,auth}.env` -
+creates `~/.config/camera-stream/{gdrive,location,performance,auth}.env` from those
+templates (everything in them commented out, so they're inert until you edit them) -
 edit them directly, or see below for a faster recovery path.
 
 | File | Required? | What it's for |
@@ -254,7 +255,7 @@ edit it in and uncomment the block yourself.
 
 ## Disaster recovery: SD card corrupts, get back up fast
 
-The repo holds all the code and unit files, but **three things live outside git on
+The repo holds all the code and unit files, but **two things live outside git on
 purpose** (they're secrets or machine-specific): the contents of
 `~/.config/camera-stream/*.env`, and whatever's currently in `snapshots/`,
 `recordings/`, `continuous/` on the dead card (the last few hours/days of footage

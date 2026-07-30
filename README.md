@@ -70,8 +70,8 @@ extra command to add its device-tree overlay - run it, then reboot. Once
 rebooted, the live stream is available at `http://<pi-ip>:8000/`.
 
 For the full walkthrough - including OS flashing, camera verification, and
-filling in optional secrets (Google Drive) - see
-[SETUP.md](./SETUP.md).
+filling in the optional config files (Google Drive backup, weather location,
+low-power boards, login auth) - see [SETUP.md](./SETUP.md).
 
 ## Update
 
@@ -89,6 +89,11 @@ To update Hawkeye Camera with the latest code changes:
     ```bash
     systemctl --user restart camera-stream.service
     ```
+
+If the update added new dependencies or a new optional config file (as several past
+updates have), re-run `./install.sh` instead of step 3 - it's idempotent and safe
+to run anytime: it only installs missing packages and only creates config files
+that don't already exist, never overwriting what you've already set up.
 
 ## Uninstall
 
