@@ -24,7 +24,8 @@ view the feed.
 - Weather overlay for your location
 - HTTP Basic Auth login (see [Authentication](./SETUP.md#authentication-optional) in SETUP.md)
 
-See [SETUP.md](./SETUP.md) for full configuration details on each.
+See [SETUP.md](./SETUP.md) for full configuration details on each, or
+[docs/architecture.md](./docs/architecture.md) for a full system diagram.
 
 ## Hardware
 
