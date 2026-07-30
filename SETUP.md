@@ -66,15 +66,7 @@ Both the Arducam 64MP Hawkeye and the official Camera Module 3 use the same
 15-pin FPC connector on the camera board itself - the cable you need depends
 only on which Pi you're connecting to, not which camera you bought:
 
-```mermaid
-flowchart LR
-    CAM["Camera board\n(Arducam 64MP Hawkeye or\nCamera Module 3)\n15-pin FPC connector"]
-    P4["Raspberry Pi 4\nsingle CSI port\n15-pin, 1mm pitch"]
-    P5["Raspberry Pi 5\nCAM/DISP0 or CAM/DISP1\n22-pin, 0.5mm pitch"]
-
-    CAM -->|"15-pin to 15-pin cable"| P4
-    CAM -->|"15-pin to 22-pin adapter cable"| P5
-```
+<img src="./docs/images/camera_cable_diagram.svg" alt="Camera cable connection diagram: Raspberry Pi 4 uses a 15-pin to 15-pin ribbon cable into its single CSI port; Raspberry Pi 5 uses a 15-pin to 22-pin adapter cable into either CAM/DISP port. Both diagrams show the cable's contacts must face toward the HDMI side of the board - inserting it reversed just means the camera won't be detected, it won't cause damage." />
 
 - **Raspberry Pi 4** has one CSI camera port: 15-pin, 1mm pitch. Use the
   standard 15-pin-to-15-pin ribbon cable - the one that ships in the box with
