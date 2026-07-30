@@ -14,7 +14,7 @@ view the feed.
 - Live stream viewable from any browser on your network, with pan/zoom/focus/rotate controls
 - Full-resolution stills on demand, independent of the live-view resolution
 - On-demand manual recordings (4K) alongside an always-on rolling buffer (720p) for after-the-fact review
-- Automatic background upload of snapshots/recordings/continuous footage to Google Drive
+- Automatic background upload of snapshots/recordings/continuous footage to Google Drive - fully optional, pausable/resumable from the UI, with backed-up files browsable and deletable from the app
 - Live weather overlay on the video feed
 - Runs unattended as a systemd user service with lingering enabled - survives reboot and logout with no login required
 

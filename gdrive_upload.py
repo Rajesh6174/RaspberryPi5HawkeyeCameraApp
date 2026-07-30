@@ -7,6 +7,7 @@ running fine without Drive configured. Uses resumable upload (not simple/multipa
 since continuous chunks run ~100MB and the Pi's uplink shouldn't be assumed fast or
 reliable.
 """
+import json
 import logging
 import os
 import queue
@@ -19,8 +20,10 @@ TOKEN_URL = "https://oauth2.googleapis.com/token"
 DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files"
 DRIVE_UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files"
 ROOT_FOLDER_NAME = "Camera Stream Backups"
+SUBFOLDERS = ("snapshots", "recordings", "continuous")
 UPLOAD_RETRIES = 3
 RETRY_BACKOFF_SECONDS = 5
+STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "drive_upload_state.json")
 
 CLIENT_ID = os.environ.get("GDRIVE_CLIENT_ID")
 CLIENT_SECRET = os.environ.get("GDRIVE_CLIENT_SECRET")
@@ -36,6 +39,43 @@ _folder_ids = {}  # (parent_id, name) -> id, memoized for this process's lifetim
 
 _upload_queue = queue.Queue()
 _warned_unconfigured = False
+
+
+def _load_enabled():
+    try:
+        with open(STATE_FILE) as f:
+            return bool(json.load(f).get("enabled", True))
+    except (OSError, ValueError):
+        return True
+
+
+def _save_enabled(enabled):
+    with open(STATE_FILE, "w") as f:
+        json.dump({"enabled": enabled}, f)
+
+
+_enabled_lock = threading.Lock()
+_enabled = _load_enabled()
+
+
+def is_enabled():
+    with _enabled_lock:
+        return _enabled
+
+
+def set_enabled(enabled):
+    global _enabled
+    with _enabled_lock:
+        _enabled = enabled
+    _save_enabled(enabled)
+
+
+def status():
+    return {
+        "configured": CONFIGURED,
+        "enabled": is_enabled(),
+        "queue_size": _upload_queue.qsize(),
+    }
 
 
 def _get_access_token():
@@ -155,7 +195,41 @@ def enqueue(local_path, subfolder, delete_after=False):
             logging.warning("Drive upload not configured (GDRIVE_* env vars unset), skipping %s", local_path)
             _warned_unconfigured = True
         return
+    if not is_enabled():
+        return
     _upload_queue.put((local_path, subfolder, delete_after))
+
+
+def list_files(subfolder):
+    if not CONFIGURED:
+        return []
+    folder_id = _subfolder_id(subfolder)
+    resp = _drive_request("GET", DRIVE_FILES_URL, params={
+        "q": f"'{folder_id}' in parents and trashed = false",
+        "fields": "files(id,name,size,createdTime,webViewLink)",
+        "orderBy": "createdTime desc",
+        "pageSize": 200,
+    })
+    resp.raise_for_status()
+    files = resp.json().get("files", [])
+    for f in files:
+        f["subfolder"] = subfolder
+    return files
+
+
+def list_all_files():
+    files = []
+    for subfolder in SUBFOLDERS:
+        files.extend(list_files(subfolder))
+    files.sort(key=lambda f: f.get("createdTime", ""), reverse=True)
+    return files
+
+
+def delete_file(file_id):
+    if not CONFIGURED:
+        raise RuntimeError("Google Drive is not configured")
+    resp = _drive_request("DELETE", f"{DRIVE_FILES_URL}/{file_id}")
+    resp.raise_for_status()
 
 
 if CONFIGURED:

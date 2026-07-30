@@ -9,6 +9,7 @@ continuous/
 # Local runtime state
 rotation_state.json
 location_state.json
+drive_upload_state.json
 
 # Secrets, in case any env file ever ends up in this directory
 *.env

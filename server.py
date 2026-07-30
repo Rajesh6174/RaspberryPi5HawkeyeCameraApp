@@ -107,6 +107,8 @@ PAGE = """\
   #rotate-btn.active:hover { background:#4f97e8; }
   #continuous-btn.active { background:#3987e5; }
   #continuous-btn.active:hover { background:#4f97e8; }
+  #drive-upload-btn.active { background:#3987e5; }
+  #drive-upload-btn.active:hover { background:#4f97e8; }
   button:disabled { background:#333; color:#777; cursor:default; }
   .btn-row { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0; }
   #capture-btn, #capture-full-btn { font-size:15px; padding:10px 14px; flex:1; }
@@ -197,6 +199,11 @@ PAGE = """\
   .chip-tab { background:#333; border:none; color:#ccc; padding:6px 14px; border-radius:5px; cursor:pointer; font-size:13px; }
   .chip-tab.active { background:#2a6; color:#fff; }
   .video-card video { width:100%; height:100px; object-fit:cover; display:block; background:#000; }
+  .drive-card .drive-icon {
+    height:100px; display:flex; align-items:center; justify-content:center;
+    background:#1c1c1c; font-size:28px; color:#5eead4;
+  }
+  .drive-card .drive-folder-badge { font-size:10px; color:#5eead4; text-transform:uppercase; letter-spacing:0.05em; }
   #fullscreen-btn {
     position:absolute; bottom:8px; right:8px; z-index:10;
     background:rgba(0,0,0,0.55); font-size:16px; padding:6px 10px; line-height:1;
@@ -346,6 +353,10 @@ PAGE = """\
   </div>
 
   <div class="btn-row">
+    <button id="drive-upload-btn" class="secondary" style="width:100%;">Google Drive: Loading&hellip;</button>
+  </div>
+
+  <div class="btn-row">
     <button id="continuous-btn" class="secondary" style="width:100%;">Stop Continuous Recording</button>
   </div>
 
@@ -415,6 +426,7 @@ PAGE = """\
       <button class="gallery-tab active" id="tab-photos" type="button">Photos</button>
       <button class="gallery-tab" id="tab-recordings" type="button">Recordings</button>
       <button class="gallery-tab" id="tab-continuous" type="button">Continuous</button>
+      <button class="gallery-tab" id="tab-drive" type="button">Drive Backups</button>
     </div>
     <div id="gallery-bulk-bar">
       <label><input type="checkbox" id="select-all-checkbox"> Select all</label>
@@ -457,6 +469,7 @@ async function postAction(path) {
 
 let rotatedState = false;
 let continuousEnabled = true;
+let driveUploadEnabled = true;
 
 function applyState(s) {
   document.getElementById('subtitle').textContent =
@@ -619,6 +632,21 @@ document.getElementById('continuous-btn').addEventListener('click', async () => 
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'request failed');
     toast(data.enabled ? 'Continuous recording started' : 'Continuous recording stopped');
+  } catch (e) {
+    toast('Failed: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('drive-upload-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('drive-upload-btn');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/drive/toggle?enabled=' + (driveUploadEnabled ? '0' : '1'), { method: 'POST' });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'request failed');
+    toast(data.enabled ? 'Google Drive uploads resumed' : 'Google Drive uploads paused');
   } catch (e) {
     toast('Failed: ' + e.message);
   } finally {
@@ -800,6 +828,19 @@ function updateSysInfo(s) {
   }
   continuousBtn.classList.toggle('active', s.continuous.enabled);
   continuousBtn.textContent = s.continuous.enabled ? 'Stop Continuous Recording' : 'Start Continuous Recording';
+
+  const driveBtn = document.getElementById('drive-upload-btn');
+  driveUploadEnabled = s.drive.enabled;
+  if (!s.drive.configured) {
+    driveBtn.disabled = true;
+    driveBtn.classList.remove('active');
+    driveBtn.textContent = 'Google Drive: Not Configured';
+  } else {
+    driveBtn.disabled = false;
+    driveBtn.classList.toggle('active', s.drive.enabled);
+    const queueNote = s.drive.queue_size > 0 ? ` (${s.drive.queue_size} queued)` : '';
+    driveBtn.textContent = (s.drive.enabled ? 'Pause Google Drive Uploads' : 'Resume Google Drive Uploads') + queueNote;
+  }
 
   updateLiveBadge(s.frame_age_seconds);
   updateRecordingUI(s.recording);
@@ -1083,6 +1124,51 @@ function renderVideoList(files, folder, deleteEndpoint, emptyLabel) {
   updateBulkBar();
 }
 
+function renderDriveList(files) {
+  galleryFiles = files;
+  currentDeleteEndpoint = '/api/drive/delete';
+  document.getElementById('gallery-title').textContent = `Drive Backups (${files.length})`;
+  const grid = document.getElementById('gallery-grid');
+  grid.innerHTML = '';
+  if (files.length === 0) {
+    grid.innerHTML = '<div id="gallery-empty">No files backed up to Drive yet.</div>';
+    updateBulkBar();
+    return;
+  }
+  files.forEach((f) => {
+    const card = document.createElement('div');
+    card.className = 'photo-card drive-card';
+    const created = f.createdTime ? new Date(f.createdTime).toLocaleString() : '';
+    card.innerHTML = `
+      <div class="drive-icon">&#9729;</div>
+      <div class="photo-meta">
+        <div class="drive-folder-badge">${f.subfolder}</div>
+        ${f.name}<br>${created}<br><span class="photo-size">${formatSize(Number(f.size) || 0)}</span>
+      </div>
+      <div class="photo-actions">
+        <a href="${f.webViewLink}" target="_blank" rel="noopener">View</a>
+        <button class="photo-delete" type="button">Delete</button>
+      </div>
+    `;
+    card.querySelector('.photo-delete').addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!confirm(`Delete ${f.name} from Google Drive? This cannot be undone.`)) return;
+      fetch('/api/drive/delete?name=' + encodeURIComponent(f.id), { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+          if (!d.ok) throw new Error(d.error || 'delete failed');
+          toast('Deleted from Drive');
+          selectedFiles.delete(f.id);
+          loadGallery();
+        })
+        .catch(e => toast('Delete failed: ' + e.message));
+    });
+    addCardSelect(card, f.id);
+    grid.appendChild(card);
+  });
+  updateBulkBar();
+}
+
 let currentGalleryTab = 'photos';
 
 function loadGallery() {
@@ -1093,9 +1179,14 @@ function loadGallery() {
   } else if (currentGalleryTab === 'recordings') {
     fetch('/api/recordings').then(r => r.json()).then(data => renderVideoList(data.files, 'recordings', '/api/recordings/delete', 'No recordings yet.'))
       .catch(() => { document.getElementById('gallery-grid').innerHTML = '<div id="gallery-empty">Failed to load recordings.</div>'; });
-  } else {
+  } else if (currentGalleryTab === 'continuous') {
     fetch('/api/continuous').then(r => r.json()).then(data => renderVideoList(data.files, 'continuous', '/api/continuous/delete', 'No buffered footage yet.'))
       .catch(() => { document.getElementById('gallery-grid').innerHTML = '<div id="gallery-empty">Failed to load buffer.</div>'; });
+  } else {
+    fetch('/api/drive/files').then(r => r.json()).then(data => {
+      if (data.error) throw new Error(data.error);
+      renderDriveList(data.files);
+    }).catch(e => { document.getElementById('gallery-grid').innerHTML = '<div id="gallery-empty">Failed to load Drive files: ' + e.message + '</div>'; });
   }
 }
 
@@ -1105,11 +1196,13 @@ function switchGalleryTab(tab) {
   document.getElementById('tab-photos').classList.toggle('active', tab === 'photos');
   document.getElementById('tab-recordings').classList.toggle('active', tab === 'recordings');
   document.getElementById('tab-continuous').classList.toggle('active', tab === 'continuous');
+  document.getElementById('tab-drive').classList.toggle('active', tab === 'drive');
   loadGallery();
 }
 document.getElementById('tab-photos').addEventListener('click', () => switchGalleryTab('photos'));
 document.getElementById('tab-recordings').addEventListener('click', () => switchGalleryTab('recordings'));
 document.getElementById('tab-continuous').addEventListener('click', () => switchGalleryTab('continuous'));
+document.getElementById('tab-drive').addEventListener('click', () => switchGalleryTab('drive'));
 
 document.getElementById('select-all-checkbox').addEventListener('change', (e) => {
   if (e.target.checked) {
@@ -1551,6 +1644,7 @@ def get_sysinfo():
         "frame_age_seconds": frame_age,
         "recording": get_recording_state(),
         "continuous": get_continuous_state(),
+        "drive": gdrive_upload.status(),
     }
 
 
@@ -1979,6 +2073,11 @@ class StreamingHandler(server.BaseHTTPRequestHandler):
             self._send_json({"files": list_recordings()})
         elif path == "/api/continuous":
             self._send_json({"files": list_continuous()})
+        elif path == "/api/drive/files":
+            try:
+                self._send_json({"files": gdrive_upload.list_all_files()})
+            except Exception as e:
+                self._send_json({"files": [], "error": str(e)}, status=500)
         elif path.startswith("/recordings/"):
             name = urllib.parse.unquote(path[len("/recordings/"):])
             if not RECORDING_NAME_RE.match(name):
@@ -2099,6 +2198,17 @@ class StreamingHandler(server.BaseHTTPRequestHandler):
             elif path == "/api/continuous/stop":
                 stop_continuous_recording()
                 self._send_json({"ok": True, **get_continuous_state()})
+            elif path == "/api/drive/toggle":
+                enabled = qs.get("enabled", ["1"])[0] == "1"
+                gdrive_upload.set_enabled(enabled)
+                self._send_json({"ok": True, **gdrive_upload.status()})
+            elif path == "/api/drive/delete":
+                # "name" here is the Google Drive file id, not a local filename -
+                # kept as "name" so the gallery's generic bulk-delete flow (which
+                # builds `<endpoint>?name=<id>`) works unchanged for this tab too.
+                file_id = qs.get("name", [""])[0]
+                gdrive_upload.delete_file(file_id)
+                self._send_json({"ok": True})
             else:
                 self.send_error(404)
                 self.end_headers()
