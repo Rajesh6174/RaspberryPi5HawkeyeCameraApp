@@ -10,7 +10,7 @@ on either a Raspberry Pi 5 or Pi 4.
 | Raspberry Pi 5 or Pi 4 (Model B, 4GB+ RAM) | Pi 5 has no hardware H.264 encoder - `server.py` encodes 4K in software, which is noticeably heavier on CPU than Pi 4. Either works; Pi 5 just runs hotter under recording load. |
 | Official power supply | Pi 5: 27W USB-C PD (5V/5A). Pi 4: 5V/3A USB-C. Undersized supplies cause random reboots/throttling under load, especially while recording. |
 | microSD card, 32GB+ (A2/U3 rated) | Or boot from USB SSD/NVMe (Pi 5 supports PCIe natively) - recommended if you'll keep the continuous buffer's retention window long, since that's ~1GB/hour at the default bitrate. |
-| Camera module | This app was built against an **Arducam 64MP Hawkeye** (autofocus, CSI). An official Raspberry Pi Camera Module (v2/v3/HQ) also works via `camera_auto_detect=1` with no extra overlay - you'll just lose the autofocus-on-capture behavior in `_autofocus_before_capture()`. |
+| Camera module | This app was built against an **Arducam 64MP Hawkeye** (autofocus, CSI), but the code is sensor-agnostic - see [Camera Compatibility](#camera-compatibility-switching-away-from-the-arducam-64mp) below for what does and doesn't change if you use a different one. |
 | CSI ribbon cable | Comes with the camera module; make sure it matches your Pi's CSI connector (Pi 5's is a different connector pitch than Pi 4's - use the cable rated for your Pi model). |
 | Cooling | Active cooling strongly recommended, especially Pi 5. CPU sits around 55-65°C under normal continuous-recording load in testing here; a passive heatsink alone will let it climb further and throttle. Official Active Cooler (Pi 5) or a case with a fan (Pi 4) is enough. |
 | Case with camera mount | Any case that exposes the CSI connector and gives the camera an unobstructed view of what you're monitoring. |
@@ -74,6 +74,49 @@ After reboot, confirm the camera is detected:
 rpicam-hello --list-cameras
 ```
 You should see your camera model and its supported resolutions listed.
+
+### Camera Compatibility: switching away from the Arducam 64MP
+
+**No code changes needed.** `server.py` never hardcodes anything about the Arducam
+sensor - resolution, autofocus lens-position range, and digital zoom/crop limits are
+all read at startup from the sensor itself:
+
+```python
+FULL_RES_SIZE = picam2.camera_properties["PixelArraySize"]      # native resolution
+LENS_MIN, LENS_MAX, LENS_DEFAULT = CONTROL_RANGES["LensPosition"]  # AF range
+FULL_CROP = picam2.camera_properties["ScalerCropMaximum"]       # zoom/pan limits
+```
+
+Swap the camera module and these adapt automatically. Confirmed by code inspection
+against a **Raspberry Pi Camera Module 3** (no hardcoded Arducam resolutions or
+model-specific branches anywhere in `server.py`) - not yet tested on physical
+Camera Module 3 hardware, so treat this as "should work," and open an issue if it
+doesn't.
+
+**One config change is required, though** - `/boot/firmware/config.txt`:
+```
+dtoverlay=arducam-64mp   # <- comment this out or delete when using a different camera
+```
+That overlay is Arducam-specific. Left in place, it prevents `camera_auto_detect=1`
+from correctly identifying a different camera. Comment it out (or delete it), reboot,
+and `camera_auto_detect=1` alone handles official Camera Modules (v2/v3/HQ) and most
+other libcamera-supported CSI cameras.
+
+**Autofocus support depends on the camera, not the code:**
+- **Camera Module 3** has electronic autofocus (IMX708, PDAF) - `LensPosition`,
+  `AfRange` (normal/macro/full), and the pre-capture autofocus pass in
+  `_autofocus_before_capture()` all work exactly as they do on the Arducam 64MP.
+- **Camera Module v2** (fixed focus) and the **HQ Camera** (manual focus ring, no
+  motorized lens) have no `LensPosition` control at all. `picam2.camera_controls`
+  simply won't include it, and the AF-related UI controls/endpoints will error if
+  used - stick to the default framing on these.
+
+**Expect a quality difference at high zoom, not a malfunction.** `ZOOM_MAX = 8.0` is
+a fixed multiplier applied to whatever `ScalerCropMaximum` the sensor reports. On the
+64MP Arducam that still leaves a large pixel crop at 8x; on a lower-resolution sensor
+(e.g. Camera Module 3's 11.9MP/4608x2592) the same 8x crop is proportionally smaller
+in absolute pixels, so maximum zoom will look softer. Everything still functions -
+it's a resolution trade-off, not a bug.
 
 ## 4. Fill in the config files (the part that can't be automated)
 
