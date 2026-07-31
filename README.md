@@ -119,8 +119,10 @@ Distributed under the MIT License, see [LICENSE](./LICENSE) for more information
 
 ## Issues
 
-Check [SETUP.md](./SETUP.md) for setup/hardware troubleshooting. For anything
-else, open an issue on the
+Check [SETUP.md](./SETUP.md) for setup/hardware troubleshooting, including a
+[Known Issues and Resolution](./SETUP.md#known-issues-and-resolution) section
+for specific problems (browser auth quirks, a `HEAD`-request quirk, etc.) with
+their exact fixes. For anything else, open an issue on the
 [GitHub Issues](https://github.com/Rajesh6174/RaspberryPi5HawkeyeCameraApp/issues) page.
 
 ## Acknowledgements

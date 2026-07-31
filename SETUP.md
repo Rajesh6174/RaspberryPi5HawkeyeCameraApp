@@ -413,6 +413,84 @@ once, then `sudo dd if=/dev/mmcblk0 of=pi-camera-backup.img bs=4M status=progres
 is the only way to get back up in literal minutes rather than "a bit longer than
 you'd like."
 
+## Known Issues and Resolution
+
+Specific problems that have actually come up running this app, with the exact fix
+that resolved them - as distinct from the
+[Known limitations](#known-limitations-worth-knowing-about) below, which are
+inherent design tradeoffs rather than bugs.
+
+### Chrome stops showing the Basic Auth login prompt after a canceled attempt
+
+**Symptom**: with `auth.env` configured, Chrome (a regular, non-Incognito window)
+shows the username/password popup the first time you visit, but if you cancel it
+or type the wrong credentials, Chrome silently stops showing the popup on
+subsequent visits - the page just hangs or looks broken, with no prompt at all.
+Incognito windows and other browsers (Firefox, etc.) keep working fine against
+the exact same URL at the same time.
+
+This is **not a server bug** - the server's 401 response (status code,
+`WWW-Authenticate` header, body) is byte-identical regardless of which browser
+sends the request. It's Chrome caching an in-memory "no valid credentials for
+this origin" state after a canceled/failed attempt, scoped to that browser
+process, which is why a fresh Incognito window (separate credential cache) isn't
+affected.
+
+**Resolution**, in order of how often each one is actually the fix:
+1. **Fully quit all Chrome windows and relaunch it** (not just close the tab) -
+   this resets the in-memory auth cache and is the most reliable fix.
+2. Check `chrome://settings/passwords` for a bad saved credential entry against
+   the Pi's IP or hostname, and delete it if present.
+3. Check `chrome://policy` for `BasicAuthOverHttpEnabled`. If your Chrome profile
+   is signed into a managed (work/school) Google account, this policy can
+   silently block the Basic Auth popup specifically over plain HTTP - it does
+   **not** affect HTTPS. If that's the cause, the real fix is switching to the
+   [Tailscale](#remote-access-via-tailscale-optional) `https://*.ts.net` URL
+   instead of the plain-HTTP LAN URL, since the policy only restricts insecure
+   HTTP.
+
+### Embedding credentials in the app's own URL breaks the web UI
+
+**Symptom**: navigating to `http://username:password@<pi-ip>:8000/` loads the
+initial page fine, but the live stats and gallery never populate - the browser
+console shows fetch errors, and the page effectively looks broken.
+
+This is a **browser-spec restriction, not a bug in this app**: the page's own
+JavaScript makes relative-URL requests (`fetch('/api/sysinfo')`, etc.), and
+relative URLs inherit the embedded userinfo (`username:password@`) from the
+page's own address. The Fetch spec hard-blocks constructing any request from a
+URL that has credentials in it, so every one of those `fetch()` calls fails
+immediately - even though the very first page load (a plain browser navigation,
+not a `fetch()`) succeeded.
+
+**Resolution**: for the browser-based web UI, always let the native Basic Auth
+*prompt* handle login - type the URL without embedded credentials
+(`http://<pi-ip>:8000/`) and enter the username/password when Chrome/Firefox
+asks. Never embed credentials in the address bar for this app's own pages.
+
+Embedding credentials in the URL is fine, and is specifically what's recommended
+for **VLC** (`http://username:password@<pi-ip>:8000/stream.mjpg`, see
+[Authentication](#authentication-optional) above) - VLC doesn't run JavaScript
+and isn't affected by this restriction.
+
+### `HEAD` requests (e.g. `curl -I`) return `501 Unsupported method`
+
+**Symptom**: `curl -I http://<pi-ip>:8000/` (or any other route) returns a
+`501 Unsupported method ('HEAD')` error instead of a clean response, which looks
+alarming if you're using `-I` as a quick health check.
+
+This app's HTTP server is built directly on Python's `http.server.BaseHTTPRequestHandler`
+(`StreamingHandler` in `server.py`), which only implements `do_GET` and
+`do_POST`. There's no `do_HEAD` handler, so the base class's default fallback
+returns 501 for any `HEAD` request. It's harmless in normal use - browsers and
+this app's own JavaScript only ever issue `GET`/`POST` - but worth knowing about
+so a `501` from `curl -I` doesn't read as a broken deployment.
+
+**Resolution**: use a plain `GET` for health checks instead, e.g.
+`curl -s http://127.0.0.1:8000/api/sysinfo` (see
+[Verify it's running](#5-verify-its-running) above) - `HEAD` support isn't
+planned, since nothing in this app's normal usage needs it.
+
 ## Known limitations worth knowing about
 
 - The MJPEG stream on port 8000 has **no authentication by default** - anyone on
