@@ -189,6 +189,16 @@ edit them directly, or see below for a faster recovery path.
 | `performance.env` | Optional | Resolution/bitrate/buffer overrides. Without it, the original fixed Pi 4/5-tuned values apply. Needed on low-RAM boards - see [Low-Power Boards](#low-power-boards-raspberry-pi-zero-2-w). |
 | `auth.env` | Optional | `CAMERA_USER`/`CAMERA_PASS` for HTTP Basic Auth on the stream and web UI. Without it (or with either value empty), the server stays open on your LAN with no login - this app's original behavior. See [Authentication](#authentication-optional) below. |
 
+### Google Drive authorization, visualized
+
+`setup_gdrive.py`'s device-authorization flow (referenced in the table above) is a
+CLI prompt, not a web page, so it's easy to be unsure what's actually happening
+behind "go to this URL, enter this code." It's Google's standard OAuth 2.0
+device-authorization flow - the same one TVs and streaming boxes use - and the Pi
+never sees your Google password, only Google's own login page does:
+
+<img src="./docs/images/gdrive_device_flow_diagram.svg" alt="Sequence diagram of the Google Drive device-authorization flow: the Pi terminal requests a device code from Google's OAuth server, prints a verification URL and short code, you open that URL and approve access on any separate phone or browser, and the Pi polls Google's token endpoint until it receives a refresh token, which it appends to gdrive.env." />
+
 Restart the service after editing any of these:
 ```bash
 systemctl --user restart camera-stream.service
@@ -239,6 +249,8 @@ while away from home - without port-forwarding anything on your router.
 [Tailscale](https://tailscale.com/) creates a private WireGuard mesh network
 between your own devices; this exposes the app only to devices signed into
 your tailnet, never the public internet.
+
+<img src="./docs/images/tailscale_access_diagram.svg" alt="Diagram comparing LAN-only access (browser to home router to Pi over http://pi-ip:8000) against Tailscale remote access (browser over the public internet through an encrypted WireGuard tunnel into your private tailnet, reaching the Pi's tailscaled/tailscale serve over https://device.tailnet.ts.net)." />
 
 ```bash
 # 1. Install (skip if already installed - check with `which tailscale`)

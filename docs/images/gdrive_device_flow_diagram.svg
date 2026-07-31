@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 760" width="1100" height="760" font-family="Verdana, Geneva, sans-serif">
+  <defs>
+    <marker id="gd-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#0f766e"/>
+    </marker>
+  </defs>
+
+  <rect width="1100" height="760" fill="#ffffff"/>
+  <text x="550" y="34" font-size="22" font-weight="bold" fill="#131b2c" text-anchor="middle">Google Drive Authorization — Device Flow</text>
+  <text x="550" y="56" font-size="14" fill="#5b6b84" text-anchor="middle">python3 setup_gdrive.py - a one-time, interactive step run by hand</text>
+
+  <!-- Lifeline headers -->
+  <g>
+    <rect x="60" y="86" width="260" height="52" rx="8" fill="#eef1f7" stroke="#4a5b7a" stroke-width="2.5"/>
+    <text x="190" y="108" font-size="14" fill="#131b2c" text-anchor="middle" font-weight="bold">Pi terminal</text>
+    <text x="190" y="126" font-size="11.5" fill="#5b6b84" text-anchor="middle">setup_gdrive.py</text>
+  </g>
+  <g>
+    <rect x="420" y="86" width="260" height="52" rx="8" fill="#f0fdfa" stroke="#0d9488" stroke-width="2.5"/>
+    <text x="550" y="108" font-size="14" fill="#131b2c" text-anchor="middle" font-weight="bold">Google OAuth server</text>
+    <text x="550" y="126" font-size="11.5" fill="#5b6b84" text-anchor="middle">device/code + token endpoints</text>
+  </g>
+  <g>
+    <rect x="780" y="86" width="260" height="52" rx="8" fill="#eef1f7" stroke="#4a5b7a" stroke-width="2.5"/>
+    <text x="910" y="108" font-size="14" fill="#131b2c" text-anchor="middle" font-weight="bold">Your phone / laptop</text>
+    <text x="910" y="126" font-size="11.5" fill="#5b6b84" text-anchor="middle">any browser, signed into Google</text>
+  </g>
+
+  <!-- Lifelines -->
+  <line x1="190" y1="138" x2="190" y2="700" stroke="#c7cede" stroke-width="2" stroke-dasharray="4,4"/>
+  <line x1="550" y1="138" x2="550" y2="700" stroke="#c7cede" stroke-width="2" stroke-dasharray="4,4"/>
+  <line x1="910" y1="138" x2="910" y2="700" stroke="#c7cede" stroke-width="2" stroke-dasharray="4,4"/>
+
+  <!-- Step 1: Pi -> Google, request device code -->
+  <circle cx="190" cy="176" r="13" fill="#0d9488"/>
+  <text x="190" y="181" font-size="12" fill="#fff" text-anchor="middle" font-weight="bold">1</text>
+  <path d="M203,176 L537,176" fill="none" stroke="#0d9488" stroke-width="2.5" marker-end="url(#gd-arrow)"/>
+  <text x="370" y="167" font-size="12" fill="#0f766e" text-anchor="middle" font-weight="bold">POST /device/code</text>
+  <text x="370" y="192" font-size="10.5" fill="#5b6b84" text-anchor="middle">client_id + scope (drive.file)</text>
+
+  <!-- Step 2: Google -> Pi, returns url+code -->
+  <circle cx="550" cy="230" r="13" fill="#0d9488"/>
+  <text x="550" y="235" font-size="12" fill="#fff" text-anchor="middle" font-weight="bold">2</text>
+  <path d="M537,230 L203,230" fill="none" stroke="#0d9488" stroke-width="2.5" marker-end="url(#gd-arrow)"/>
+  <text x="370" y="221" font-size="12" fill="#0f766e" text-anchor="middle" font-weight="bold">verification_url + user_code</text>
+  <text x="370" y="246" font-size="10.5" fill="#5b6b84" text-anchor="middle">short-lived, e.g. 30 min</text>
+
+  <!-- Terminal output box -->
+  <g transform="translate(70,268)">
+    <rect x="0" y="0" width="240" height="66" rx="8" fill="#131b2c"/>
+    <text x="120" y="24" font-size="11" fill="#5eead4" text-anchor="middle" font-family="ui-monospace, Menlo, Consolas, monospace">Go to: google.com/device</text>
+    <text x="120" y="42" font-size="11" fill="#5eead4" text-anchor="middle" font-family="ui-monospace, Menlo, Consolas, monospace">Enter code: WDJB-MJHT</text>
+    <text x="120" y="58" font-size="9.5" fill="#7d93b5" text-anchor="middle">printed to the terminal</text>
+  </g>
+
+  <!-- Step 3: You read code, open on phone -->
+  <circle cx="190" cy="378" r="13" fill="#0d9488"/>
+  <text x="190" y="383" font-size="12" fill="#fff" text-anchor="middle" font-weight="bold">3</text>
+  <path d="M203,378 L897,378" fill="none" stroke="#0d9488" stroke-width="2.5" marker-end="url(#gd-arrow)"/>
+  <text x="550" y="369" font-size="12" fill="#0f766e" text-anchor="middle" font-weight="bold">you read the URL + code, open it on any device</text>
+  <text x="550" y="394" font-size="10.5" fill="#5b6b84" text-anchor="middle">not required to be the Pi itself - any browser works</text>
+
+  <!-- Step 4: phone -> google, enter code + approve -->
+  <circle cx="910" cy="432" r="13" fill="#0d9488"/>
+  <text x="910" y="437" font-size="12" fill="#fff" text-anchor="middle" font-weight="bold">4</text>
+  <path d="M897,432 L563,432" fill="none" stroke="#0d9488" stroke-width="2.5" marker-end="url(#gd-arrow)"/>
+  <text x="730" y="423" font-size="12" fill="#0f766e" text-anchor="middle" font-weight="bold">sign in, enter code, approve access</text>
+  <text x="730" y="448" font-size="10.5" fill="#5b6b84" text-anchor="middle">grants drive.file scope (app-created files only)</text>
+
+  <!-- Step 5: Pi polls Google -->
+  <circle cx="190" cy="502" r="13" fill="#0d9488"/>
+  <text x="190" y="507" font-size="12" fill="#fff" text-anchor="middle" font-weight="bold">5</text>
+  <path d="M203,502 L537,502" fill="none" stroke="#0d9488" stroke-width="2.5" stroke-dasharray="7,4" marker-end="url(#gd-arrow)"/>
+  <text x="370" y="493" font-size="12" fill="#0f766e" text-anchor="middle" font-weight="bold">POST /token (polling)</text>
+  <text x="370" y="518" font-size="10.5" fill="#5b6b84" text-anchor="middle">every few seconds until approved or expired</text>
+
+  <!-- Step 6: Google -> Pi, refresh token -->
+  <circle cx="550" cy="556" r="13" fill="#0d9488"/>
+  <text x="550" y="561" font-size="12" fill="#fff" text-anchor="middle" font-weight="bold">6</text>
+  <path d="M537,556 L203,556" fill="none" stroke="#0d9488" stroke-width="2.5" marker-end="url(#gd-arrow)"/>
+  <text x="370" y="547" font-size="12" fill="#0f766e" text-anchor="middle" font-weight="bold">refresh_token</text>
+  <text x="370" y="572" font-size="10.5" fill="#5b6b84" text-anchor="middle">once you've approved on step 4</text>
+
+  <!-- Result box -->
+  <g transform="translate(60,600)">
+    <rect x="0" y="0" width="280" height="80" rx="8" fill="#f0fdfa" stroke="#0d9488" stroke-width="2"/>
+    <text x="140" y="24" font-size="12.5" fill="#131b2c" text-anchor="middle" font-weight="bold">Saved automatically</text>
+    <text x="140" y="42" font-size="10.5" fill="#5b6b84" text-anchor="middle">GDRIVE_REFRESH_TOKEN appended to</text>
+    <text x="140" y="58" font-size="10.5" fill="#5b6b84" text-anchor="middle">~/.config/camera-stream/gdrive.env</text>
+    <text x="140" y="74" font-size="10" fill="#8493ab" text-anchor="middle">then restart camera-stream.service</text>
+  </g>
+
+  <text x="550" y="732" font-size="12" fill="#8493ab" text-anchor="middle">This is Google's standard OAuth 2.0 device-authorization flow - the same one TVs and streaming boxes use.</text>
+  <text x="550" y="748" font-size="12" fill="#8493ab" text-anchor="middle">The Pi never sees your Google password; only Google's own login page does.</text>
+</svg>
