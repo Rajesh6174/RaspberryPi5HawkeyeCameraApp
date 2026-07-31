@@ -1009,6 +1009,12 @@ function formatSize(bytes) {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
+function escapeHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = String(s);
+  return div.innerHTML;
+}
+
 let galleryFiles = [];
 let lightboxIndex = -1;
 
@@ -1172,8 +1178,8 @@ function renderDriveList(files) {
     card.innerHTML = `
       <div class="drive-icon">&#9729;</div>
       <div class="photo-meta">
-        <div class="drive-folder-badge">${f.subfolder}</div>
-        ${f.name}<br>${created}<br><span class="photo-size">${formatSize(Number(f.size) || 0)}</span>
+        <div class="drive-folder-badge">${escapeHtml(f.subfolder)}</div>
+        ${escapeHtml(f.name)}<br>${created}<br><span class="photo-size">${formatSize(Number(f.size) || 0)}</span>
       </div>
       <div class="photo-actions">
         <a href="${f.webViewLink}" target="_blank" rel="noopener">View</a>
