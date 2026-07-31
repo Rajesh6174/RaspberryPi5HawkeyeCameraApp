@@ -225,9 +225,30 @@ def list_all_files():
     return files
 
 
+def _owned_folder_ids():
+    """IDs of this app's own subfolders under ROOT_FOLDER_NAME (created/memoized
+    the same way uploads do), used to scope deletes to files we actually manage."""
+    root_id = _ensure_folder(ROOT_FOLDER_NAME)
+    return {_ensure_folder(sf, root_id) for sf in SUBFOLDERS}
+
+
 def delete_file(file_id):
     if not CONFIGURED:
         raise RuntimeError("Google Drive is not configured")
+    # The delete endpoint takes a bare Drive file id from the client (the gallery's
+    # bulk-delete flow reuses the same `?name=<id>` shape as local file deletes) with
+    # no server-side link back to "this is a file we uploaded". Without this check,
+    # any caller who can reach /api/drive/delete - which, same as every other route,
+    # depends entirely on Basic Auth being configured - could delete an arbitrary file
+    # by id, not just ones inside this app's own backup folder. The OAuth token here
+    # is scoped to drive.file (only files this app created/opened), which already
+    # bounds the damage, but this closes the gap explicitly rather than relying on
+    # that scope alone.
+    meta_resp = _drive_request("GET", f"{DRIVE_FILES_URL}/{file_id}", params={"fields": "parents"})
+    meta_resp.raise_for_status()
+    parents = set(meta_resp.json().get("parents") or [])
+    if not parents & _owned_folder_ids():
+        raise RuntimeError("refusing to delete a file outside this app's Drive backup folder")
     resp = _drive_request("DELETE", f"{DRIVE_FILES_URL}/{file_id}")
     resp.raise_for_status()
 
