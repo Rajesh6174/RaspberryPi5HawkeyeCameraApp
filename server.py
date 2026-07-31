@@ -1698,7 +1698,10 @@ def list_snapshots():
         if not SNAPSHOT_NAME_RE.match(name):
             continue
         path = os.path.join(SNAPSHOT_DIR, name)
-        st = os.stat(path)
+        try:
+            st = os.stat(path)
+        except FileNotFoundError:
+            continue  # deleted concurrently (e.g. a racing delete request)
         entries.append({
             "name": name,
             "size": st.st_size,
@@ -1869,7 +1872,10 @@ def list_recordings():
         if not RECORDING_NAME_RE.match(name):
             continue
         path = os.path.join(RECORDING_DIR, name)
-        st = os.stat(path)
+        try:
+            st = os.stat(path)
+        except FileNotFoundError:
+            continue  # deleted concurrently (e.g. a racing delete request)
         entries.append({
             "name": name,
             "size": st.st_size,
@@ -1924,8 +1930,14 @@ def _cleanup_continuous():
         if not CONTINUOUS_NAME_RE.match(name) or name == continuous_file:
             continue
         path = os.path.join(CONTINUOUS_DIR, name)
-        if os.stat(path).st_mtime < cutoff:
-            os.remove(path)
+        try:
+            stale = os.stat(path).st_mtime < cutoff
+            if stale:
+                os.remove(path)
+        except FileNotFoundError:
+            # Someone else (a concurrent /api/continuous/delete request) already
+            # removed it - not an error, just nothing left to clean up here.
+            pass
 
 
 def _rotate_continuous_segment():
@@ -1946,7 +1958,15 @@ continuous_stop_event = Event()
 def continuous_recorder_loop():
     while not continuous_stop_event.wait(CONTINUOUS_SEGMENT_SECONDS):
         if continuous_enabled:
-            camera_worker.submit(_rotate_continuous_segment).result()
+            try:
+                camera_worker.submit(_rotate_continuous_segment).result()
+            except Exception:
+                # Same pattern as weather_loop: never let one bad rotation (e.g. a
+                # race with a concurrent /api/continuous/delete, a transient encoder
+                # error, or a full disk) permanently kill this daemon thread - that
+                # would silently disable the rolling buffer's rotation/cleanup until
+                # the whole service is restarted.
+                logging.exception("continuous segment rotation failed")
 
 
 def _start_continuous_recording():
@@ -1978,7 +1998,10 @@ def list_continuous():
         if not CONTINUOUS_NAME_RE.match(name):
             continue
         path = os.path.join(CONTINUOUS_DIR, name)
-        st = os.stat(path)
+        try:
+            st = os.stat(path)
+        except FileNotFoundError:
+            continue  # deleted concurrently (e.g. the rotation cleanup)
         entries.append({
             "name": name,
             "size": st.st_size,
@@ -2139,36 +2162,30 @@ class StreamingHandler(server.BaseHTTPRequestHandler):
             name = urllib.parse.unquote(path[len("/recordings/"):])
             if not RECORDING_NAME_RE.match(name):
                 self.send_error(404)
-                self.end_headers()
                 return
             fpath = os.path.join(RECORDING_DIR, name)
             if not os.path.isfile(fpath):
                 self.send_error(404)
-                self.end_headers()
                 return
             self._send_video_file(fpath)
         elif path.startswith("/continuous/"):
             name = urllib.parse.unquote(path[len("/continuous/"):])
             if not CONTINUOUS_NAME_RE.match(name):
                 self.send_error(404)
-                self.end_headers()
                 return
             fpath = os.path.join(CONTINUOUS_DIR, name)
             if not os.path.isfile(fpath):
                 self.send_error(404)
-                self.end_headers()
                 return
             self._send_video_file(fpath)
         elif path.startswith("/snapshots/"):
             name = urllib.parse.unquote(path[len("/snapshots/"):])
             if not SNAPSHOT_NAME_RE.match(name):
                 self.send_error(404)
-                self.end_headers()
                 return
             fpath = os.path.join(SNAPSHOT_DIR, name)
             if not os.path.isfile(fpath):
                 self.send_error(404)
-                self.end_headers()
                 return
             with open(fpath, "rb") as f:
                 content = f.read()
@@ -2179,7 +2196,6 @@ class StreamingHandler(server.BaseHTTPRequestHandler):
             self.wfile.write(content)
         else:
             self.send_error(404)
-            self.end_headers()
 
     def do_POST(self):
         if not self._check_auth():
@@ -2270,7 +2286,6 @@ class StreamingHandler(server.BaseHTTPRequestHandler):
                 self._send_json({"ok": True})
             else:
                 self.send_error(404)
-                self.end_headers()
         except Exception as e:
             logging.exception("control request failed")
             self._send_json({"ok": False, "error": str(e)}, status=400)
