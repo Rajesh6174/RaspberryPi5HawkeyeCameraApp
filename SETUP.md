@@ -232,6 +232,53 @@ a sensitive password here. This absolutely does not make it safe to port-forward
 port 8000 to the public internet - for that, put a reverse proxy with real HTTPS in
 front of it instead.
 
+## Remote Access via Tailscale (optional)
+
+For reaching the camera from outside your LAN - checking it from your phone
+while away from home - without port-forwarding anything on your router.
+[Tailscale](https://tailscale.com/) creates a private WireGuard mesh network
+between your own devices; this exposes the app only to devices signed into
+your tailnet, never the public internet.
+
+```bash
+# 1. Install (skip if already installed - check with `which tailscale`)
+curl -fsSL https://tailscale.com/install.sh | sh
+
+# 2. Log in - prints a URL, open it on any device to approve this Pi
+sudo tailscale up
+
+# 3. One-time: let your own account run tailscale commands without sudo
+sudo tailscale set --operator=$USER
+
+# 4. Enable Serve on your tailnet if this is the first time using it -
+#    running this will print an admin-console approval link if needed
+tailscale serve --bg 8000
+```
+
+That last command prints a private URL in the form
+`https://<device-name>.<tailnet-name>.ts.net/` - open it from any device
+signed into the same tailnet (install the Tailscale app there too) and it
+behaves like any normal HTTPS site, no VPN toggling needed. The certificate
+is real (Tailscale provisions it automatically), which also sidesteps the
+Basic Auth's plain-HTTP caveat above - traffic to that URL is genuinely
+encrypted end to end.
+
+This persists automatically across reboots once set up, since `tailscaled`
+runs as its own system service independent of `camera-stream.service`.
+
+**VLC note**: the browser-friendly URL above won't work directly in VLC the
+way the LAN URL does, since it needs the Tailscale client active on
+whichever device runs VLC. Untested combination:
+`https://username:password@<device-name>.<tailnet-name>.ts.net/stream.mjpg`
+with the Tailscale app running on that machine.
+
+**Scope note**: this sets up *private* access (only your own tailnet
+devices). Tailscale also supports Funnel, which exposes a URL to the actual
+public internet - a much bigger step for a camera feed, deliberately not
+covered here. If you want that, read Tailscale's own Funnel docs and think
+carefully about what "public" means for whatever this camera is pointed at
+first.
+
 ## Low-Power Boards (Raspberry Pi Zero 2 W)
 
 The Zero 2 W is a much weaker board than the Pi 4/5 this app was tuned for: a

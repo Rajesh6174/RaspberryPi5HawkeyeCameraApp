@@ -23,6 +23,7 @@ view the feed.
 - Google Drive backup (OAuth device-flow authorization, resumable uploads)
 - Weather overlay for your location
 - HTTP Basic Auth login (see [Authentication](./SETUP.md#authentication-optional) in SETUP.md)
+- Private remote access via [Tailscale](./SETUP.md#remote-access-via-tailscale-optional) - reach the camera from outside your LAN with no port-forwarding
 
 See [SETUP.md](./SETUP.md) for full configuration details on each, or
 [docs/architecture.md](./docs/architecture.md) for a full system diagram.
