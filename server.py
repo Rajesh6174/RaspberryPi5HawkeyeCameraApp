@@ -1,4 +1,6 @@
 import base64
+import fcntl
+import glob
 import hmac
 import io
 import json
@@ -7,6 +9,7 @@ import os
 import re
 import shutil
 import socketserver
+import struct
 import time
 import urllib.parse
 import urllib.request
@@ -50,9 +53,52 @@ def _env_bool(name, default):
     return default if val is None else val not in ("0", "false", "False", "")
 
 
+def _probe_hw_h264_encoder_max_size():
+    """Ask the board's actual V4L2 H.264 encoder (if any) what the largest
+    frame size it supports is, e.g. Pi 4's bcm2835-codec-encode is hardware-
+    capped at 1920x1920 regardless of camera/sensor resolution - it's a SoC
+    limit, not a camera one, so this has to be queried from the encoder
+    device itself rather than inferred from which camera is attached.
+    Returns (max_w, max_h) or None if no hardware H.264 encoder is found
+    (e.g. Pi 5, which has no hardware H.264 encode block at all)."""
+    VIDIOC_QUERYCAP = 0x80685600
+    VIDIOC_ENUM_FRAMESIZES = 0xC02C564A
+    V4L2_FRMSIZE_TYPE_DISCRETE = 1
+    V4L2_FRMSIZE_TYPE_STEPWISE = 3
+    PIX_FMT_H264 = struct.unpack("<I", b"H264")[0]
+
+    best = None
+    for dev in sorted(glob.glob("/dev/video*")):
+        try:
+            fd = os.open(dev, os.O_RDWR | os.O_NONBLOCK)
+        except OSError:
+            continue
+        try:
+            cap = bytearray(104)
+            fcntl.ioctl(fd, VIDIOC_QUERYCAP, cap)
+            card = bytes(cap[16:48]).split(b"\x00", 1)[0].decode(errors="ignore")
+            if "encode" not in card.lower():
+                continue
+            buf = bytearray(struct.pack("<III24x8x", 0, PIX_FMT_H264, 0))
+            fcntl.ioctl(fd, VIDIOC_ENUM_FRAMESIZES, buf)
+            frm_type = struct.unpack_from("<I", buf, 8)[0]
+            if frm_type == V4L2_FRMSIZE_TYPE_STEPWISE:
+                _, max_w, _, _, max_h, _ = struct.unpack_from("<IIIIII", buf, 12)
+            elif frm_type == V4L2_FRMSIZE_TYPE_DISCRETE:
+                max_w, max_h = struct.unpack_from("<II", buf, 12)
+            else:
+                continue
+            if best is None or max_w * max_h > best[0] * best[1]:
+                best = (max_w, max_h)
+        except OSError:
+            continue
+        finally:
+            os.close(fd)
+    return best
+
+
 SNAPSHOT_NAME_RE = re.compile(r"^snapshot_(full_)?\d{8}_\d{6}\.jpg$")
 RECORDING_NAME_RE = re.compile(r"^recording_\d{8}_\d{6}\.mp4$")
-RECORDING_BITRATE = _env_int("RECORDING_BITRATE", 20_000_000)  # 4K H.264, software-encoded on Pi 5 (no hw encoder)
 
 CONTINUOUS_NAME_RE = re.compile(r"^continuous_\d{8}_\d{6}\.mp4$")
 CONTINUOUS_BITRATE = _env_int("CONTINUOUS_BITRATE", 2_000_000)  # 720p H.264, low CPU/storage cost for an always-on buffer
@@ -64,7 +110,40 @@ CONTINUOUS_DEFAULT_ENABLED = _env_bool("CONTINUOUS_DEFAULT_ENABLED", True)
 # so 4K recording (or whatever size is set here) can start instantly with no mode
 # switch. On low-RAM boards, shrinking this is the single biggest lever - it's an
 # always-on buffer cost, not just a during-recording one.
+#
+# CAMERA_MAIN_WIDTH/HEIGHT default to 3840x2160 ("4K"), then get auto-clamped
+# down to whatever the board's hardware H.264 encoder can actually do (see
+# _probe_hw_h264_encoder_max_size() above) - this is what makes recording work
+# out of the box on Pi 4 (hw encoder capped ~1920x1920) without manual config,
+# while staying at full 4K on boards whose encoder supports it. An explicit
+# CAMERA_MAIN_WIDTH/HEIGHT in performance.env always wins over auto-detection.
+_MAIN_SIZE_EXPLICIT = "CAMERA_MAIN_WIDTH" in os.environ or "CAMERA_MAIN_HEIGHT" in os.environ
 LIVE_MAIN_SIZE = (_env_int("CAMERA_MAIN_WIDTH", 3840), _env_int("CAMERA_MAIN_HEIGHT", 2160))
+_RECORDING_BITRATE_EXPLICIT = "RECORDING_BITRATE" in os.environ
+RECORDING_BITRATE = _env_int("RECORDING_BITRATE", 20_000_000)  # 4K H.264 default; auto-scaled down if resolution is auto-clamped
+
+if not _MAIN_SIZE_EXPLICIT:
+    _hw_max = _probe_hw_h264_encoder_max_size()
+    if _hw_max is not None:
+        _hw_max_w, _hw_max_h = _hw_max
+        _want_w, _want_h = LIVE_MAIN_SIZE
+        if _want_w > _hw_max_w or _want_h > _hw_max_h:
+            _scale = min(_hw_max_w / _want_w, _hw_max_h / _want_h)
+            _new_w = max(2, int(_want_w * _scale) & ~1)
+            _new_h = max(2, int(_want_h * _scale) & ~1)
+            logging.warning(
+                "Requested main resolution %dx%d exceeds this board's hardware "
+                "H.264 encoder limit (%dx%d) - auto-clamping to %dx%d. Set "
+                "CAMERA_MAIN_WIDTH/HEIGHT in performance.env to override.",
+                _want_w, _want_h, _hw_max_w, _hw_max_h, _new_w, _new_h,
+            )
+            LIVE_MAIN_SIZE = (_new_w, _new_h)
+            if not _RECORDING_BITRATE_EXPLICIT:
+                RECORDING_BITRATE = max(
+                    1_000_000,
+                    int(RECORDING_BITRATE * (_new_w * _new_h) / (_want_w * _want_h)),
+                )
+
 LIVE_LORES_SIZE = (_env_int("CAMERA_LORES_WIDTH", 1280), _env_int("CAMERA_LORES_HEIGHT", 720))  # live view / MJPEG preview resolution
 CAMERA_BUFFER_COUNT = _env_int("CAMERA_BUFFER_COUNT", 6)
 
@@ -371,7 +450,7 @@ PAGE = """\
     <span id="capture-status" class="val" style="width:auto;"></span>
   </div>
   <div class="btn-row">
-    <button id="record-btn">&#9679; Start Recording (4K)</button>
+    <button id="record-btn">&#9679; Start Recording</button>
     <span id="record-status" class="val" style="width:auto;"></span>
   </div>
   <div class="btn-row">
@@ -500,10 +579,27 @@ async function postAction(path) {
 let rotatedState = false;
 let continuousEnabled = true;
 let driveUploadEnabled = true;
+let recordLabel = 'Recording';
+
+function sizeLabel(w, h) {
+  // Reflects whatever record_size the server actually configured - which is
+  // itself auto-detected from this board's hardware H.264 encoder, so this
+  // label follows automatically if the camera or board changes.
+  if (w >= 3840 && h >= 2160) return '4K';
+  if (w >= 2560 && h >= 1440) return '1440p';
+  if (w >= 1920 && h >= 1080) return '1080p';
+  if (w >= 1280 && h >= 720) return '720p';
+  return `${w}x${h}`;
+}
 
 function applyState(s) {
   document.getElementById('subtitle').textContent =
     `${s.sensor_model} · ${s.full_res_size[0]}×${s.full_res_size[1]} native · records up to ${s.record_size[0]}×${s.record_size[1]}`;
+
+  recordLabel = sizeLabel(s.record_size[0], s.record_size[1]);
+  if (!recordingActive) {
+    document.getElementById('record-btn').innerHTML = `&#9679; Start Recording (${recordLabel})`;
+  }
 
   rotatedState = s.rotated;
   const rotateBtn = document.getElementById('rotate-btn');
@@ -617,13 +713,13 @@ function updateRecordingUI(rec) {
   const badge = document.getElementById('rec-badge');
   const status = document.getElementById('record-status');
   if (rec.active) {
-    btn.innerHTML = '&#9632; Stop Recording (4K)';
+    btn.innerHTML = `&#9632; Stop Recording (${recordLabel})`;
     btn.classList.add('recording');
     badge.classList.add('show');
-    document.getElementById('rec-time').textContent = 'REC 4K ' + formatDuration(rec.elapsed_seconds || 0);
+    document.getElementById('rec-time').textContent = `REC ${recordLabel} ` + formatDuration(rec.elapsed_seconds || 0);
     status.textContent = formatDuration(rec.elapsed_seconds || 0);
   } else {
-    btn.innerHTML = '&#9679; Start Recording (4K)';
+    btn.innerHTML = `&#9679; Start Recording (${recordLabel})`;
     btn.classList.remove('recording');
     badge.classList.remove('show');
   }
@@ -1467,6 +1563,7 @@ encoder_lock = Lock()
 video_encoder = None
 recording_file = None
 recording_start_time = None
+recording_paused_continuous = False
 lores_encoder = None
 continuous_encoder = None
 continuous_file = None
@@ -1834,24 +1931,37 @@ def get_recording_state():
 
 
 def _start_recording_clip():
-    global video_encoder, recording_file, recording_start_time
+    global video_encoder, recording_file, recording_start_time, recording_paused_continuous
     with encoder_lock:
         if video_encoder is not None:
             raise RuntimeError("already recording")
         fname = f"recording_{time.strftime('%Y%m%d_%H%M%S')}.mp4"
         path = os.path.join(RECORDING_DIR, fname)
+        # The Pi's hardware H.264 encoder only supports one concurrent session,
+        # so the always-on continuous buffer (also H264, on "lores") has to be
+        # paused for the duration of a manual recording - same pattern used by
+        # _capture_full_res()/_set_rotation() for their own conflicting ops.
+        was_continuous = continuous_encoder is not None
+        if was_continuous:
+            _stop_continuous_segment()
         encoder = H264Encoder(bitrate=RECORDING_BITRATE)
         # "main" stream is always configured at LIVE_MAIN_SIZE (4K), so this starts
         # instantly and the "lores" preview keeps streaming on the browser unaffected.
-        picam2.start_encoder(encoder, FfmpegOutput(path), name="main")
+        try:
+            picam2.start_encoder(encoder, FfmpegOutput(path), name="main")
+        except Exception:
+            if was_continuous:
+                _start_continuous_segment()
+            raise
         video_encoder = encoder
         recording_file = fname
         recording_start_time = time.time()
+        recording_paused_continuous = was_continuous
     return fname
 
 
 def _stop_recording_clip():
-    global video_encoder, recording_file, recording_start_time
+    global video_encoder, recording_file, recording_start_time, recording_paused_continuous
     with encoder_lock:
         if video_encoder is None:
             raise RuntimeError("not recording")
@@ -1860,6 +1970,9 @@ def _stop_recording_clip():
         video_encoder = None
         recording_file = None
         recording_start_time = None
+        if recording_paused_continuous:
+            _start_continuous_segment()
+        recording_paused_continuous = False
     gdrive_upload.enqueue(os.path.join(RECORDING_DIR, fname), "recordings", delete_after=False)
     return fname
 
